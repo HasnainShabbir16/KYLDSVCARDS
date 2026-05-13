@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.inputT {
+  @apply bg-naval/70 rounded-lg px-4 py-2 mb-1 text-naval-50 font-medium border border-naval/20 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-naval placeholder:text-naval-200 transition;
+}
+.bg-naval {
+  background-color: #1a263a !important;
+}
+.text-naval-50 {
+  color: #e8edfb !important;
+}
+.border-naval {
+  border-color: #1a263a !important;
+}
