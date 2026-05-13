@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYLDSVCARDS - Create Dynamic vCard QR</title>
+  <link href="/styles/tailwind.css" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="theme-color" content="#1a263a">
+  <style>
+    body { background: radial-gradient(circle at 25% 25%, #223055 60%, #151922 100%); }
+    .glass {
+      background: rgba(13,19,33,0.6);
+      border-radius: 1.5rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px 0 rgba(31,38,135,0.37);
+      border: 1px solid rgba(255,255,255,0.1);
+      animation: glassIn 1s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+    }
+    @keyframes glassIn {
+      from { transform: translateY(60px) scale(0.97); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+    .card-anim {
+      animation: cardPop 0.7s ease;
+    }
+    @keyframes cardPop {
+      0% { transform: scale(0.88) translateY(24px); opacity: 0; }
+      80% { transform: scale(1.04) translateY(-6px); opacity: 1; }
+      100% { transform: scale(1) translateY(0); }
+    }
+    .qr-anim {
+      animation: qrShow 0.8s cubic-bezier(.4,2.3,.75,.95);
+    }
+    @keyframes qrShow { from { opacity:0; transform:scale(0.6);} to{opacity:1; transform:none;} }
+  </style>
+</head>
+<body class="h-screen min-h-screen flex items-center justify-center">
+  <div class="container mx-auto p-4 flex flex-col md:flex-row gap-8 items-center justify-center w-full">
+    <!-- Card Form -->
+    <form id="cardForm" class="w-full md:w-1/2 glass p-8 max-w-lg shadow-xl flex flex-col gap-5" enctype="multipart/form-data" autocomplete="off">
+      <h1 class="text-3xl text-center font-bold text-white mb-2 tracking-wide">Create Your Smart vCard</h1>
+      <div class="flex flex-col gap-3">
+        <input type="text" name="name" placeholder="Full Name" required class="inputT">
+        <input type="text" name="title" placeholder="Job Title" class="inputT">
+        <input type="tel" name="phone" placeholder="Phone" class="inputT">
+        <input type="email" name="email" placeholder="Email" class="inputT">
+        <input type="url" name="website" placeholder="Website" class="inputT">
+        <input type="password" name="password" placeholder="Set Password (optional)" class="inputT">
+      </div>
+      <div>
+        <label class="block mb-1 text-white font-medium">Profile Image</label>
+        <input type="file" name="image" id="imageInput" accept="image/*" class="block file:bg-naval file:text-white file:rounded file:px-3 file:py-1 text-white bg-naval/60 rounded-lg border border-naval focus:ring-2 focus:ring-naval/80">
+      </div>
+      <button type="submit" class="w-full bg-gradient-to-tr from-naval to-blue-500 py-2 rounded-lg font-bold text-lg text-white mt-3 hover:from-blue-800 hover:to-naval transition ease-in-out duration-200 shadow-lg focus:ring-4 focus:ring-naval">Create Card & Get QR</button>
+    </form>
+
+    <!-- Live Preview Card -->
+    <div class="w-full md:w-1/2 max-w-md relative">
+      <div id="liveCard" class="card-anim glass p-7 pb-4 text-white relative flex flex-col items-center min-h-[340px] shadow-lg border border-white/10">
+        <div class="w-28 h-28 mb-4 relative rounded-full overflow-hidden border-4 border-blue-300 bg-naval group">
+          <img id="previewImg" src="/default-avatar.png" alt="Profile Image" class="object-cover w-full h-full transition duration-300 group-hover:scale-105">
+        </div>
+        <div class="w-full text-center flex flex-col gap-1 min-h-[120px]" style="font-family: 'Inter', system-ui, sans-serif;">
+          <h2 id="previewName" class="text-2xl md:text-3xl font-extrabold tracking-tight animate-pop">John Doe</h2>
+          <div id="previewTitle" class="text-lg text-blue-200">Product Designer</div>
+          <div class="flex justify-center gap-3 mt-1">
+            <span id="previewPhone" class="text-blue-300"></span>
+            <span id="previewEmail" class="text-blue-200"></span>
+          </div>
+          <div id="previewWebsite" class="text-blue-400 underline mt-2"></div>
+        </div>
+        <div class="mt-5">
+          <span class="inline-flex animate-pulse rounded-full bg-blue-700/50 text-xs text-blue-100 px-2 py-1">Password protected available</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Modal -->
+  <div id="successModal" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50">
+    <div class="glass p-8 flex flex-col items-center max-w-sm shadow-2xl">
+      <h3 class="text-xl mb-3 font-bold text-white">Your card is ready!</h3>
+      <div id="qrHolder" class="w-40 h-40 mb-4 rounded-lg bg-white flex items-center justify-center overflow-hidden qr-anim"></div>
+      <p class="text-blue-100 text-sm mb-4">Scan to view your card, or share with others.</p>
+      <a id="goToCardBtn" href="#" target="_blank" class="bg-gradient-to-tr from-naval to-blue-500 px-5 py-2 rounded-full font-bold text-white text-lg hover:scale-105 active:scale-95 transition">
