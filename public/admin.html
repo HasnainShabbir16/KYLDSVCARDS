@@ -1,16 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KYLDS — Admin Panel</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<style>
-/* ...CSS omitted for brevity in this message, but included in code for push... */
-</style>
+  <meta charset="UTF-8">
+  <title>Admin - Card Creator</title>
+  <style>
+    /* Simple styles for clarity */
+    body { font-family: Arial; max-width: 500px; margin: auto; }
+    input, select, textarea { width: 100%; margin-bottom: 10px; padding: 5px; }
+  </style>
 </head>
 <body>
-<!-- ...full admin.html body omitted for brevity in this message, but included in code for push... -->
+  <h2>Create New Card</h2>
+  <form id="cardForm">
+    <input placeholder="Name"    name="name"      required /><br>
+    <input placeholder="Role"    name="role"      required /><br>
+    <input placeholder="Department" name="department" /><br>
+    <input placeholder="Phone"   name="phone"     /><br>
+    <input placeholder="Email"   name="email"     /><br>
+    <input placeholder="Password" type="password" name="password" required /><br>
+    <label>Avatar Image <input type="file" id="avatarInput" accept="image/*"></label><br>
+    <label>Cover Image  <input type="file" id="coverInput" accept="image/*"></label><br>
+    <button type="submit">Create Card</button>
+  </form>
+  <div id="result"></div>
+  <script>
+    // Convert image to base64
+    function imageToBase64(input, cb) {
+      if (!input.files || !input.files[0]) return cb('');
+      const reader = new FileReader();
+      reader.onload = e => cb(e.target.result);
+      reader.readAsDataURL(input.files[0]);
+    }
+
+    document.getElementById('cardForm').onsubmit = function(e) {
+      e.preventDefault();
+
+      let form = e.target;
+      let formData = {
+        name: form.name.value,
+        role: form.role.value,
+        department: form.department.value,
+        phone: form.phone.value,
+        email: form.email.value,
+        password: form.password.value
+      };
+
+      // Wait for both images, then POST
+      imageToBase64(document.getElementById('avatarInput'), function(avatar64) {
+        formData.avatar = avatar64;
+        imageToBase64(document.getElementById('coverInput'), function(cover64) {
+          formData.cover = cover64;
+          fetch('/api/cards/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              document.getElementById('result').innerHTML = `
+                <b>Card created!</b><br>
+                Card ID: <code>${data.card._id}</code><br>
+                <a href="/public/view.html?id=${data.card._id}" target="_blank">View card</a><br>
+                <a href="https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(location.origin + '/public/view.html?id=' + data.card._id)}&size=150x150" target="_blank">QR code (click to open QR image)</a>
+              `;
+              form.reset();
+            } else {
+              document.getElementById('result').innerText = 'Error: ' + data.error;
+            }
+          })
+          .catch(err => document.getElementById('result').innerText = 'Request failed: ' + err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>
