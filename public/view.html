@@ -1,16 +1,130 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#09090B">
-<title>KYLDS — Member Profile</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
-<style>
-/* ...CSS omitted for brevity in this chat message but present in the actual file push... */
-</style>
+  <meta charset="UTF-8">
+  <title>View Card</title>
+  <style>
+    body { font-family: Arial; max-width: 500px; margin: auto; }
+    .locked { filter: blur(4px); pointer-events: none }
+    .avatar { width: 96px; height: 96px; object-fit: cover; border-radius: 50%; border: 2px solid #ccc; }
+    .cover  { width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; }
+    #pwPrompt, #vcardPrompt { background: #fff; border: 1px solid #ddd; padding: 16px; margin: 24px 0; }
+  </style>
 </head>
 <body>
-<!-- ...full HTML omitted for brevity in this message, but complete file is pushed... -->
+  <h2>Digital Card</h2>
+  <div id="card"></div>
+  <div id="pwPrompt">
+    <b>This card is protected.<br>Please enter password:</b><br>
+    <input type="password" id="pwInput" />
+    <button onclick="unlockCard()">Unlock</button>
+  </div>
+  <div id="vcardPrompt" style="display:none">
+    <b>To save this contact, re-enter password:</b><br>
+    <input type="password" id="vcardPwInput" />
+    <button onclick="exportVCard(true)">Confirm</button>
+    <button onclick="closeVCard()">Cancel</button>
+  </div>
+  <script>
+    let cardData;
+    const cardDiv = document.getElementById('card');
+
+    // Helper to get query param
+    function getId() {
+      const params = new URLSearchParams(location.search);
+      return params.get('id');
+    }
+
+    // Render card, locked/unlocked state
+    function renderCard(data, locked) {
+      let html = '';
+      if (data.cover) html += `<img class="cover" src="${data.cover}" alt="Cover"><br>`;
+      if (data.avatar) html += `<img class="avatar" src="${data.avatar}" alt="Avatar"><br>`;
+      html += `
+        <h3>${data.name || ''}</h3>
+        <b>${data.role || ''}</b><br>
+        ${data.department || ''}<br>
+        <br>Phone: ${!locked ? (data.phone || '') : '******'}
+        <br>Email: ${!locked ? (data.email || '') : '******'}
+        <br>
+        <button onclick="showVCardPrompt()" ${locked ? 'disabled' : ''}>Save to Contacts (vCard)</button>
+      `;
+      cardDiv.innerHTML = html;
+      cardDiv.className = locked ? 'locked' : '';
+      document.getElementById('pwPrompt').style.display = locked ? 'block' : 'none';
+    }
+
+    // Load card
+    function loadCard() {
+      const id = getId();
+      fetch(`/api/cards/get/${id}`)
+        .then(res => res.json())
+        .then(d => {
+          if (d.success) {
+            cardData = d.card;
+            renderCard(cardData, true);
+          } else {
+            cardDiv.innerHTML = '<b>Card not found.</b>';
+            document.getElementById('pwPrompt').style.display = 'none';
+          }
+        });
+    }
+    loadCard();
+
+    // Unlock
+    function unlockCard() {
+      const pw = document.getElementById('pwInput').value;
+      if (!pw) return alert('Enter password');
+      fetch(`/api/cards/unlock/${getId()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      }).then(res => res.json())
+        .then(d => {
+          if (d.success) {
+            cardData = d.card;
+            renderCard(cardData, false);
+          } else {
+            alert('Incorrect password');
+          }
+        });
+    }
+
+    // Show vCard double-auth
+    function showVCardPrompt() {
+      document.getElementById('vcardPrompt').style.display = 'block';
+    }
+    function closeVCard() {
+      document.getElementById('vcardPrompt').style.display = 'none';
+      document.getElementById('vcardPwInput').value = '';
+    }
+
+    // vCard export with double password check
+    function exportVCard(fromPrompt) {
+      let pw = document.getElementById('vcardPwInput').value;
+      if (!pw) return alert('Enter password');
+      fetch(`/api/cards/unlock/${getId()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      }).then(res => res.json())
+        .then(d => {
+          if (d.success) {
+            closeVCard();
+            const card = cardData;
+            // Generate vCard
+            const vCard =
+              `BEGIN:VCARD\nVERSION:3.0\nFN:${card.name}\nTITLE:${card.role}\nORG:${card.department}\nTEL:${card.phone}\nEMAIL:${card.email}\nEND:VCARD`;
+            const blob = new Blob([vCard], { type: 'text/vcard' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (card.name || 'contact') + '.vcf';
+            a.click();
+          } else {
+            alert('Incorrect password');
+          }
+        });
+    }
+  </script>
 </body>
 </html>
