@@ -1,33 +1,28 @@
-// server.js - Express entry point for vCard QR System
-require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const path = require('path');
+const cors = require('cors');
+require('dotenv').config();
 
-const cardRoutes = require('./routes/card');
+const cardsRoute = require('./routes/cards');
 
 const app = express();
 
-// MongoDB Atlas connection
-mongoose.connect(process.env.MONGODB_URI, {
+app.use(cors());
+app.use(express.json({ limit: '10mb' })); // to support large avatars/covers
+
+// Connect to MongoDB Atlas
+mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => {
   console.log('MongoDB connected');
-}).catch((err) => {
-  console.error('MongoDB connection error:', err);
+}).catch(err => {
+  console.error('Mongo error:', err.message);
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use('/api/cards', cardsRoute);
 
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Card API routes
-app.use('/', cardRoutes);
-
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log('Server started on port', PORT);
 });
