@@ -55,6 +55,18 @@ router.get('/', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+// Delete card by ID
+router.delete('/:id', async (req, res) => {
+  try {
+    const deleted = await Card.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Card not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 // Unlock card by ID and password (for view.html)
 router.post('/unlock/:id', async (req, res) => {
   try {
