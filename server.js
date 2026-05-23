@@ -5,10 +5,10 @@ const path = require('path');
 require('dotenv').config();
 
 const cardsRoute = require('./routes/cards');
-
+app.use('/api/cards', cardsRouter);
 const app = express();
 
-app.use(cors());
+//app.use(cors());
 app.use(express.json({ limit: '10mb' })); // to support large images
 
 // Serve static files from 'public' folder at '/public' path
