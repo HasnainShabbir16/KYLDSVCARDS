@@ -4,11 +4,11 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-const cardsRoute = require('./routes/cards');
-app.use('/api/cards', cardsRouter);
-const app = express();
+const app = express(); // MUST be defined before .use()!
 
-//app.use(cors());
+// Enable cross-origin requests (CORS)
+app.use(cors());
+
 app.use(express.json({ limit: '10mb' })); // to support large images
 
 // Serve static files from 'public' folder at '/public' path
@@ -19,8 +19,9 @@ app.get('/', (req, res) => {
   res.redirect('/public/admin.html');
 });
 
-// API routes for cards
-app.use('/api/cards', cardsRoute);
+// API routes for cards (make sure you have this line after 'app' is defined!)
+const cardsRouter = require('./routes/cards');
+app.use('/api/cards', cardsRouter);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI, {
