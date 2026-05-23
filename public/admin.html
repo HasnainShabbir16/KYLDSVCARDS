@@ -956,8 +956,12 @@ function updPrev(){
 
 // ════ QR ════
 function getURL(card){
-  const base = (brand.url || '/public/view.html').replace(/\/$/, '');
-  return `${base}?id=${encodeURIComponent(card.id)}`;
+  const base = brand.url?.trim() || '/public/view.html';
+  let url =
+    base.startsWith('http')
+      ? base
+      : `${location.origin.replace(/\/$/, '')}${base.startsWith('/') ? '' : '/'}${base}`;
+  return `${url}?id=${encodeURIComponent(card.id || card._id)}`;
 }
 function genQR(card){
   const url  = getURL(card);
