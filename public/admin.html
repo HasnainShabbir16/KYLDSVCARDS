@@ -869,7 +869,7 @@ async function saveCard(){
   try {
     // Use PUT /api/cards/:id for edits, POST /api/cards/create for new cards.
     // TODO: adjust if your edit endpoint differs.
-    const url    = editId ? `/api/cards/${encodeURIComponent(editId)}` : '/api/cards/create';
+  const url    = editId ? `/api/cards/update/${encodeURIComponent(editId)}` : '/api/cards/create';
     const method = editId ? 'PUT' : 'POST';
     const res    = await fetch(url, {
       method,
