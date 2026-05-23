@@ -67,6 +67,17 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+// Get a card by its Mongo ObjectId
+router.get('/get/:id', async (req, res) => {
+  try {
+    const card = await Card.findById(req.params.id).lean();
+    if (!card) return res.status(404).json({ success: false, error: 'Card not found' });
+    const { password, ...rest } = card; // exclude password
+    res.json({ success: true, card: rest });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 // Unlock card by ID and password (for view.html)
 router.post('/unlock/:id', async (req, res) => {
   try {
