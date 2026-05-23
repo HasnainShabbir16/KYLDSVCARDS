@@ -27,7 +27,15 @@ router.post('/create', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
+// List all cards (for admin)
+router.get('/', async (req, res) => {
+  try {
+    const cards = await Card.find({}).lean();
+    res.json({ success: true, cards });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 // Update an existing card
 router.put('/update/:id', async (req, res) => {
   try {
