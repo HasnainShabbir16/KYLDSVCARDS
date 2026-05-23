@@ -730,215 +730,483 @@ body{background:var(--dark);color:var(--text);font-family:var(--ff);min-height:1
 </div>
 
 <script>
-// ════════════ DEMO DATA (mirrors admin localStorage) ════════════
-const DEMO = {
-  'KYLDS-001':{id:'KYLDS-001',name:'Dr. Zara Khan',title:'President',cabinet:'Literary Cabinet',email:'z.khan@kylds.org',phone:'+92 300 1111111',addr:'Room 1, KYLDS HQ, Srinagar',web:'https://kylds.org',li:'',tw:'',ig:'',fb:'',bio:'Distinguished orator, literary critic, and champion of youth intellectual discourse across Kashmir.',pass:'president2024',active:true,avatar:'',cover:''},
-  'KYLDS-002':{id:'KYLDS-002',name:'Mr. Arif Qureshi',title:'General Secretary',cabinet:'Debating Cabinet',email:'a.qureshi@kylds.org',phone:'+92 311 2222222',addr:'Room 2, KYLDS HQ, Srinagar',web:'',li:'https://linkedin.com',tw:'',ig:'',fb:'',bio:'Three-time national debate champion. Passionate about youth leadership and policy advocacy.',pass:'gensec2024',active:true,avatar:'',cover:''},
-  'KYLDS-003':{id:'KYLDS-003',name:'Ms. Sana Mir',title:'Cultural Secretary',cabinet:'Cultural Cabinet',email:'s.mir@kylds.org',phone:'+92 321 3333333',addr:'Room 5, KYLDS HQ, Srinagar',web:'',li:'',tw:'',ig:'https://instagram.com',fb:'',bio:'Arts and culture coordinator dedicated to preserving Kashmiri literary heritage.',pass:'culture2024',active:false,avatar:'',cover:''},
+// ════════════ CONFIG ════════════
+
+// TODO:
+// If your backend route is different, change ONLY these endpoints.
+const API = {
+  getCard: (id) => `/api/cards/get/${id}`,
+  unlock: (id) => `/api/cards/unlock/${id}`
 };
 
-// ════════════ LOAD CARD ════════════
+// ════════════ STATE ════════════
+
 const params = new URLSearchParams(location.search);
-const cardId  = params.get('id') || 'KYLDS-001';
+const cardId = params.get('id');
 
-// Try localStorage first (admin saved), fallback to demo
-let cards = {};
-try{ cards = JSON.parse(localStorage.getItem('kc')||'[]').reduce((m,c)=>{m[c.id]=c;return m;},{});}catch(e){}
-const card = cards[cardId] || DEMO[cardId] || null;
+let card = null;
+let unlocked = false;
+let attempts = 5;
 
-// Load watermark from admin
-const wmSrc = localStorage.getItem('kylds_wm')||'';
-const logoSrc = localStorage.getItem('kylds_logo')||'';
+// ════════════ HELPERS ════════════
 
-// Init preview chip
-function ini(n){return(n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();}
-if(card){
-  document.getElementById('chip-name').textContent = card.name;
+function ini(n){
+  return (n || '?')
+    .split(' ')
+    .map(w => w[0])
+    .slice(0,2)
+    .join('')
+    .toUpperCase();
+}
+
+function maskValue(value){
+  if(!value) return '******';
+  return '******';
+}
+
+function escapeHtml(str=''){
+  return str
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+// ════════════ INITIAL LOAD ════════════
+
+window.addEventListener('DOMContentLoaded', loadCard);
+
+async function loadCard(){
+  if(!cardId){
+    showFatal('Card not found');
+    return;
+  }
+
+  try{
+    const res = await fetch(API.getCard(cardId));
+
+    if(!res.ok){
+      throw new Error('Card not found');
+    }
+
+    const data = await res.json();
+
+    if(!data){
+      throw new Error('Card not found');
+    }
+
+    card = data.card || data;
+
+    if(!card){
+      throw new Error('Card not found');
+    }
+
+    initPreviewChip();
+    populateCard(false);
+
+    document.getElementById('card-screen').classList.add('visible');
+
+  }catch(err){
+    console.error(err);
+    showFatal('Unable to load member card');
+  }
+}
+
+// ════════════ PREVIEW CHIP ════════════
+
+function initPreviewChip(){
+  document.getElementById('chip-name').textContent = card.name || 'Unknown Member';
+
   const av = document.getElementById('chip-av');
-  if(card.avatar){av.innerHTML=`<img src="${card.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;}
-  else{av.textContent=ini(card.name);}
+
+  if(card.avatar){
+    av.innerHTML = `
+      <img src="${card.avatar}"
+           style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+    `;
+  }else{
+    av.textContent = ini(card.name);
+  }
 }
 
 // ════════════ UNLOCK ════════════
-let attempts = 5;
-function tryUnlock(){
-  if(!card){toast('Card not found','err');return;}
-  const val = document.getElementById('pw-inp').value.trim();
+
+async function tryUnlock(){
+
+  if(!card){
+    toast('Card not loaded','err');
+    return;
+  }
+
+  const input = document.getElementById('pw-inp');
   const btn = document.getElementById('unlock-btn');
-  if(val === card.pass){
-    if(!card.active){showLocked();return;}
-    populateCard();
+  const errBox = document.getElementById('pw-err');
+
+  const password = input.value.trim();
+
+  if(!password){
+    errBox.textContent = 'Please enter the access code.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Unlocking...';
+
+  try{
+
+    const res = await fetch(API.unlock(cardId),{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json'
+      },
+      body:JSON.stringify({ password })
+    });
+
+    const data = await res.json();
+
+    if(!res.ok || !data.success){
+
+      attempts--;
+
+      input.classList.add('err-shake');
+      setTimeout(()=>input.classList.remove('err-shake'),500);
+
+      errBox.textContent =
+        data.message || 'Incorrect password. Please try again.';
+
+      document.getElementById('att-cnt').textContent = attempts;
+
+      if(attempts <= 0){
+        errBox.textContent = 'Too many failed attempts.';
+        btn.disabled = true;
+        input.disabled = true;
+      }
+
+      btn.disabled = false;
+      btn.textContent = '🔓 Unlock Profile';
+
+      return;
+    }
+
+    unlocked = true;
+
+    // IMPORTANT:
+    // Use backend-returned unlocked card
+    // so all future actions use secure/latest data.
+    card = data.card || card;
+
+    populateCard(true);
+
     document.getElementById('pw-screen').classList.add('exit');
+
     setTimeout(()=>{
       document.getElementById('pw-screen').style.display='none';
-      document.getElementById('card-screen').classList.add('visible');
     },600);
-    logScan();
-  } else {
-    attempts--;
-    const inp = document.getElementById('pw-inp');
-    inp.classList.add('err-shake');
-    setTimeout(()=>inp.classList.remove('err-shake'),500);
-    const e = document.getElementById('pw-err');
-    e.textContent = 'Incorrect password. Please try again.';
-    document.getElementById('att-cnt').textContent = attempts;
-    if(attempts <= 0){
-      e.textContent = 'Too many failed attempts. Card locked.';
-      btn.disabled=true;inp.disabled=true;
-    }
-    setTimeout(()=>e.textContent='',2500);
+
+    toast('Profile unlocked','ok');
+
+  }catch(err){
+
+    console.error(err);
+
+    errBox.textContent =
+      'Network error. Please try again.';
+
+    btn.disabled = false;
+    btn.textContent = '🔓 Unlock Profile';
   }
 }
 
 function toggleEye(btn){
   const inp = document.getElementById('pw-inp');
-  inp.type = inp.type==='password'?'text':'password';
-  btn.textContent = inp.type==='password'?'👁️':'🙈';
+
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+
+  btn.textContent =
+    inp.type === 'password' ? '👁️' : '🙈';
 }
 
 // ════════════ POPULATE CARD ════════════
-function populateCard(){
-  if(!card)return;
+
+function populateCard(showPrivate = false){
+
+  if(!card) return;
 
   // Cover
   const cover = document.getElementById('c-cover');
-  if(card.cover) cover.style.backgroundImage=`url(${card.cover})`;
+
+  if(card.cover){
+    cover.style.backgroundImage = `url(${card.cover})`;
+  }
 
   // Avatar
   const av = document.getElementById('c-avatar');
-  if(card.avatar){av.innerHTML=`<img src="${card.avatar}">`;}
-  else{av.textContent=ini(card.name);}
 
-  // Watermark logo
-  if(wmSrc){const wm=document.getElementById('wm-logo-img');wm.src=wmSrc;wm.style.display='block';}
+  if(card.avatar){
+    av.innerHTML = `<img src="${card.avatar}">`;
+  }else{
+    av.textContent = ini(card.name);
+  }
 
   // Identity
-  document.getElementById('c-id').textContent = card.id;
-  document.getElementById('c-name').textContent = card.name;
-  document.getElementById('c-title').textContent = card.title||'';
-  document.getElementById('c-cabinet').textContent = card.cabinet||'';
-  if(card.bio){const b=document.getElementById('c-bio');b.textContent=card.bio;b.style.display='block';}
+  document.getElementById('c-id').textContent =
+    card.id || '';
+
+  document.getElementById('c-name').textContent =
+    card.name || '';
+
+  document.getElementById('c-title').textContent =
+    card.title || '';
+
+  document.getElementById('c-cabinet').textContent =
+    card.cabinet || '';
+
+  if(card.bio){
+    const b = document.getElementById('c-bio');
+    b.textContent = card.bio;
+    b.style.display = 'block';
+  }
 
   // Contacts
   const cg = document.getElementById('contact-grid');
+
   const contacts = [];
-  if(card.email) contacts.push({icon:'✉️',lbl:'Email',val:card.email,href:`mailto:${card.email}`});
-  if(card.phone) contacts.push({icon:'📞',lbl:'Phone',val:card.phone,href:`tel:${card.phone}`});
-  if(card.web)   contacts.push({icon:'🌐',lbl:'Website',val:card.web.replace(/^https?:\/\//,''),href:card.web});
-  cg.innerHTML = contacts.map(c=>`
-    <a class="contact-card" href="${c.href}" ${c.href.startsWith('http')?'target="_blank"':''}>
+
+  // Email
+  if(card.email){
+    contacts.push({
+      icon:'✉️',
+      lbl:'Email',
+      val: showPrivate ? card.email : maskValue(card.email),
+      href: showPrivate ? `mailto:${card.email}` : '#'
+    });
+  }
+
+  // Phone
+  if(card.phone){
+    contacts.push({
+      icon:'📞',
+      lbl:'Phone',
+      val: showPrivate ? card.phone : maskValue(card.phone),
+      href: showPrivate ? `tel:${card.phone}` : '#'
+    });
+  }
+
+  // Website
+  if(card.web){
+    contacts.push({
+      icon:'🌐',
+      lbl:'Website',
+      val: card.web.replace(/^https?:\/\//,''),
+      href: card.web
+    });
+  }
+
+  cg.innerHTML = contacts.map(c => `
+    <a class="contact-card"
+       href="${c.href}"
+       ${c.href.startsWith('http') ? 'target="_blank"' : ''}>
       <div class="contact-icon-wrap">${c.icon}</div>
       <div class="contact-meta">
-        <div class="contact-lbl">${c.lbl}</div>
-        <div class="contact-val">${c.val}</div>
+        <div class="contact-lbl">${escapeHtml(c.lbl)}</div>
+        <div class="contact-val">${escapeHtml(c.val)}</div>
       </div>
       <div class="contact-arrow">→</div>
-    </a>`).join('');
-  if(!contacts.length)document.getElementById('contacts-section').style.display='none';
+    </a>
+  `).join('');
+
+  if(!contacts.length){
+    document.getElementById('contacts-section').style.display='none';
+  }
 
   // Address
-  if(card.addr){document.getElementById('c-addr').textContent=card.addr;document.getElementById('addr-section').style.display='block';}
+  if(card.addr){
+    document.getElementById('c-addr').textContent = card.addr;
+    document.getElementById('addr-section').style.display='block';
+  }
 
-  // Social
-  const socials=[{k:'li',icon:'💼',lbl:'LinkedIn'},{k:'tw',icon:'🐦',lbl:'Twitter'},{k:'ig',icon:'📸',lbl:'Instagram'},{k:'fb',icon:'👤',lbl:'Facebook'}].filter(s=>card[s.k]);
+  // Socials
+  const socials = [
+    {k:'li',icon:'💼',lbl:'LinkedIn'},
+    {k:'tw',icon:'🐦',lbl:'Twitter'},
+    {k:'ig',icon:'📸',lbl:'Instagram'},
+    {k:'fb',icon:'👤',lbl:'Facebook'}
+  ].filter(s => card[s.k]);
+
   if(socials.length){
-    document.getElementById('social-row').innerHTML=socials.map(s=>`<a class="social-btn" href="${card[s.k]}" target="_blank"><span>${s.icon}</span>${s.lbl}</a>`).join('');
+
+    document.getElementById('social-row').innerHTML =
+      socials.map(s => `
+        <a class="social-btn"
+           href="${card[s.k]}"
+           target="_blank">
+          <span>${s.icon}</span>${s.lbl}
+        </a>
+      `).join('');
+
     document.getElementById('social-section').style.display='block';
   }
 
-  // Action buttons
-  if(!card.phone) document.querySelector('.action-btn:nth-child(2)').style.opacity='.4';
-  if(!card.email) document.querySelector('.action-btn:nth-child(3)').style.opacity='.4';
-}
+  // Disable actions until unlocked
+  if(!showPrivate){
 
-function showLocked(){
-  document.getElementById('pw-screen').classList.add('exit');
-  setTimeout(()=>{
-    document.getElementById('pw-screen').style.display='none';
-    document.getElementById('card-screen').classList.add('visible');
-    document.getElementById('card-cont').innerHTML=`
-      <div class="locked-card">
-        <div class="lock-big">🔒</div>
-        <h2>Card Deactivated</h2>
-        <p>This member card has been deactivated by the administrator.<br><br>Please contact KYLDS for assistance.</p>
-      </div>`;
-  },600);
-}
+    document.querySelector('.action-btn:nth-child(2)').style.opacity = '.4';
+    document.querySelector('.action-btn:nth-child(3)').style.opacity = '.4';
 
-// ════════════ LOG SCAN ════════════
-function logScan(){
-  try{
-    const logs = JSON.parse(localStorage.getItem('kl')||'[]');
-    const isMob = /Mobi|Android|iPhone/i.test(navigator.userAgent);
-    const br = /(Chrome|Safari|Firefox|Edge|Opera)/i.exec(navigator.userAgent)?.[1]||'Unknown';
-    logs.push({id:card.id,name:card.name,time:new Date().toLocaleString(),dev:isMob?'Mobile':'Desktop',br,ip:'—'});
-    localStorage.setItem('kl',JSON.stringify(logs));
-    // Increment scan count on card
-    const cards2 = JSON.parse(localStorage.getItem('kc')||'[]');
-    const idx = cards2.findIndex(c=>c.id===card.id);
-    if(idx>-1){cards2[idx].scans=(cards2[idx].scans||0)+1;cards2[idx].lastScan=new Date().toLocaleDateString();localStorage.setItem('kc',JSON.stringify(cards2));}
-  }catch(e){}
+  }else{
+
+    document.querySelector('.action-btn:nth-child(2)').style.opacity = '1';
+    document.querySelector('.action-btn:nth-child(3)').style.opacity = '1';
+  }
 }
 
 // ════════════ ACTIONS ════════════
+
 function saveContact(){
-  if(!card)return;
-  const vcf=[
-    'BEGIN:VCARD','VERSION:3.0',
-    `FN:${card.name}`,
-    card.title?`TITLE:${card.title}`:'',
-    card.cabinet?`ORG:KYLDS – ${card.cabinet}`:'ORG:Kashmir Youth Literary and Debating Society',
-    card.email?`EMAIL;type=WORK:${card.email}`:'',
-    card.phone?`TEL;type=WORK:${card.phone}`:'',
-    card.web?`URL:${card.web}`:'',
-    card.addr?`ADR;type=WORK:;;${card.addr};;;;`:'',
-    card.li?`X-SOCIALPROFILE;type=linkedin:${card.li}`:'',
+
+  if(!unlocked){
+    toast('Unlock profile first','err');
+    return;
+  }
+
+  const vcf = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${card.name || ''}`,
+    card.title ? `TITLE:${card.title}` : '',
+    card.cabinet
+      ? `ORG:KYLDS – ${card.cabinet}`
+      : 'ORG:Kashmir Youth Literary and Debating Society',
+    card.email ? `EMAIL;type=WORK:${card.email}` : '',
+    card.phone ? `TEL;type=WORK:${card.phone}` : '',
+    card.web ? `URL:${card.web}` : '',
+    card.addr ? `ADR;type=WORK:;;${card.addr};;;;` : '',
+    card.li ? `X-SOCIALPROFILE;type=linkedin:${card.li}` : '',
     'END:VCARD'
-  ].filter(Boolean).join('\r\n');
-  const b=new Blob([vcf],{type:'text/vcard'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`${card.name.replace(/\s+/g,'_')}.vcf`;a.click();
+  ]
+  .filter(Boolean)
+  .join('\r\n');
+
+  const b = new Blob([vcf],{type:'text/vcard'});
+
+  const a = document.createElement('a');
+
+  a.href = URL.createObjectURL(b);
+
+  a.download =
+    `${(card.name || 'member').replace(/\s+/g,'_')}.vcf`;
+
+  a.click();
+
   toast('Contact saved!','ok');
 }
 
 function callMember(){
-  if(!card||!card.phone){toast('No phone number','err');return;}
-  window.location.href=`tel:${card.phone}`;
+
+  if(!unlocked || !card.phone){
+    toast('Unlock profile first','err');
+    return;
+  }
+
+  window.location.href = `tel:${card.phone}`;
 }
+
 function emailMember(){
-  if(!card||!card.email){toast('No email address','err');return;}
-  window.location.href=`mailto:${card.email}`;
+
+  if(!unlocked || !card.email){
+    toast('Unlock profile first','err');
+    return;
+  }
+
+  window.location.href = `mailto:${card.email}`;
 }
 
 function copyLink(){
-  navigator.clipboard.writeText(location.href).catch(()=>{});
-  toast('Profile link copied!','ok');
+
+  navigator.clipboard
+    .writeText(location.href)
+    .then(()=>toast('Profile link copied!','ok'))
+    .catch(()=>toast('Unable to copy link','err'));
 }
+
+// ════════════ SHARE ════════════
 
 function openShare(){
   document.getElementById('share-sheet').classList.add('open');
   document.getElementById('ss-ov').classList.add('open');
 }
+
 function closeShare(){
   document.getElementById('share-sheet').classList.remove('open');
   document.getElementById('ss-ov').classList.remove('open');
 }
+
 function shareWA(){
-  if(!card)return;
-  window.open(`https://wa.me/?text=${encodeURIComponent(`${card.name} — KYLDS Member Profile\n${location.href}`)}`,'_blank');
-}
-function shareEmail(){
-  if(!card)return;
-  window.location.href=`mailto:?subject=${encodeURIComponent(card.name+' — KYLDS Member Card')}&body=${encodeURIComponent('View profile: '+location.href)}`;
+
+  if(!card) return;
+
+  window.open(
+    `https://wa.me/?text=${encodeURIComponent(
+      `${card.name} — KYLDS Member Profile\n${location.href}`
+    )}`,
+    '_blank'
+  );
 }
 
-// ════════════ TOAST ════════════
+function shareEmail(){
+
+  if(!card) return;
+
+  window.location.href =
+    `mailto:?subject=${encodeURIComponent(
+      (card.name || 'Member') + ' — KYLDS Member Card'
+    )}&body=${encodeURIComponent(
+      'View profile: ' + location.href
+    )}`;
+}
+
+// ════════════ UI HELPERS ════════════
+
+function showFatal(msg){
+
+  document.getElementById('pw-screen').style.display='none';
+
+  document.getElementById('card-screen').classList.add('visible');
+
+  document.getElementById('card-cont').innerHTML = `
+    <div class="locked-card">
+      <div class="lock-big">⚠️</div>
+      <h2>${msg}</h2>
+      <p>
+        The requested member card could not be loaded.<br><br>
+        Please check the link or contact KYLDS administration.
+      </p>
+    </div>
+  `;
+}
+
 function toast(msg,type='i'){
-  const w=document.getElementById('vtw');
-  const t=document.createElement('div');t.className='vt';
-  t.innerHTML=`<div class="vtd ${type}"></div><span>${msg}</span>`;
+
+  const w = document.getElementById('vtw');
+
+  const t = document.createElement('div');
+
+  t.className = 'vt';
+
+  t.innerHTML =
+    `<div class="vtd ${type}"></div><span>${msg}</span>`;
+
   w.appendChild(t);
+
   setTimeout(()=>t.classList.add('show'),10);
-  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),400);},2800);
+
+  setTimeout(()=>{
+    t.classList.remove('show');
+
+    setTimeout(()=>t.remove(),400);
+
+  },2800);
 }
 </script>
 </body>
