@@ -569,155 +569,163 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
 <div id="sbo" onclick="toggleSB()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:190"></div>
 
 <script>
-// ════ STATE ════
-let ADM='admin123';
-let cards=[];  // always loaded from /api/cards on login — never localStorage
-let logs=JSON.parse(localStorage.getItem('kl')||'[]');
-let brand=JSON.parse(localStorage.getItem('kb')||'{"name":"Kashmir Youth Literary and Debating Society","abbr":"KYLDS","tag":"Voices of the Valley","url":"view.html"}');
-let photos={a:'',c:''};
-let editId=null,curQR=null,mpwId=null;
+// ════ CONFIG ════
+// TODO: If your backend uses a different admin credential check endpoint,
+//       replace the local ADM check with a POST /api/auth/login call.
+let ADM = 'admin123';
 
-// Demo scan logs only (cards come from the backend API, not localStorage)
-if(!logs.length){
-  logs=[
-    {id:'KYLDS-001',name:'Dr. Zara Khan',time:'2024-01-15 10:32',dev:'Mobile',br:'Safari',ip:'182.183.x.x'},
-    {id:'KYLDS-002',name:'Mr. Arif Qureshi',time:'2024-01-14 16:45',dev:'Desktop',br:'Chrome',ip:'103.201.x.x'},
-    {id:'KYLDS-001',name:'Dr. Zara Khan',time:'2024-01-13 14:20',dev:'Mobile',br:'Chrome',ip:'45.120.x.x'},
-  ];
-  localStorage.setItem('kl',JSON.stringify(logs));
+// ════ STATE ════
+// cards[] is ALWAYS sourced from the backend — never from localStorage.
+let cards = [];
+let logs  = JSON.parse(localStorage.getItem('kl') || '[]');
+let brand = JSON.parse(localStorage.getItem('kb') || '{"name":"Kashmir Youth Literary and Debating Society","abbr":"KYLDS","tag":"Voices of the Valley","url":"/public/view.html"}');
+let photos  = { a: '', c: '' };
+let editId  = null, curQR = null, mpwId = null;
+
+// sv() intentionally left as no-op — all card persistence is via the API.
+function sv(){}
+const ini = n => (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+
+// ════ NORMALISE API CARD → internal shape ════
+// Handles both naming conventions your Express backend might return.
+function norm(c){
+  if(!c) return null;
+  const id = c.id || c._id || c.memberId || '';
+  return {
+    id,
+    name:     c.name     || '',
+    title:    c.title    || c.role       || '',
+    cabinet:  c.cabinet  || c.department || '',
+    bio:      c.bio      || '',
+    email:    c.email    || '',
+    phone:    c.phone    || '',
+    web:      c.web      || c.website    || '',
+    addr:     c.addr     || c.address    || '',
+    li:       c.li       || (c.social && c.social.linkedin)  || '',
+    tw:       c.tw       || (c.social && c.social.twitter)   || '',
+    ig:       c.ig       || (c.social && c.social.instagram) || '',
+    fb:       c.fb       || (c.social && c.social.facebook)  || '',
+    pass:     c.pass     || c.password   || '',
+    active:   c.active   !== false,
+    avatar:   c.avatar   || '',
+    cover:    c.cover    || '',
+    scans:    c.scans    || 0,
+    lastScan: c.lastScan || '',
+  };
 }
 
-// sv() is kept as a no-op so any remaining call sites don’t throw.
-// Card persistence is handled entirely by the backend API.
-function sv(){}
-const ini=n=>(n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-
-// ════ FETCH CARDS FROM API ════
+// ════ FETCH ALL CARDS FROM BACKEND ════
+// Called on login, after every CRUD operation, and on members-page nav.
 async function fetchCards(){
-  try{
-    const res=await fetch('/api/cards');
-    if(!res.ok) throw new Error(`Server responded ${res.status}`);
-    const data=await res.json();
-    // Normalise each card so existing render/edit code keeps working.
-    // Maps API field names → internal UI names used throughout the file.
-    cards=(Array.isArray(data)?data:[]).map(c=>({
-      id:       c.id        || c._id        || c.memberId || '',
-      name:     c.name      || '',
-      title:    c.title     || c.role       || '',
-      cabinet:  c.cabinet   || c.department || '',
-      bio:      c.bio       || '',
-      email:    c.email     || '',
-      phone:    c.phone     || '',
-      web:      c.web       || c.website    || '',
-      addr:     c.addr      || c.address    || '',
-      li:       c.li        || (c.social&&c.social.linkedin)  || '',
-      tw:       c.tw        || (c.social&&c.social.twitter)   || '',
-      ig:       c.ig        || (c.social&&c.social.instagram) || '',
-      fb:       c.fb        || (c.social&&c.social.facebook)  || '',
-      pass:     c.pass      || c.password   || '',
-      active:   c.active    !== false,
-      avatar:   c.avatar    || '',
-      cover:    c.cover     || '',
-      scans:    c.scans     || 0,
-      lastScan: c.lastScan  || '',
-    }));
-  }catch(err){
-    console.error('[KYLDS] fetchCards error:',err);
-    toast('Could not load cards from server','err');
-    cards=[];
+  try {
+    const res  = await fetch('/api/cards');
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // Backend may return an array directly OR { success, cards:[...] }
+    const arr  = Array.isArray(data) ? data : (data.cards || data.data || []);
+    cards = arr.map(norm).filter(c => c && c.id);
+  } catch(err){
+    console.error('[KYLDS] fetchCards:', err);
+    toast('Could not load members from server — check your connection.', 'err');
+    cards = [];
   }
+}
+
+// Convenience: fetch fresh data then refresh whichever panels are visible.
+async function refreshAll(){
+  await fetchCards();
+  initDash();
+  if(document.getElementById('p-members').classList.contains('active')) renderM(cards);
 }
 
 // ════ AUTH ════
 function doLogin(){
-  const u=document.getElementById('lu').value.trim();
-  const p=document.getElementById('lp').value;
-  if(u==='admin'&&p===ADM){
+  const u = document.getElementById('lu').value.trim();
+  const p = document.getElementById('lp').value;
+  if(u === 'admin' && p === ADM){
     document.getElementById('login-wrap').classList.add('gone');
     document.getElementById('app').classList.add('on');
-    // Load all cards from the backend, then boot the dashboard
-    fetchCards().then(()=>{
-      initDash();
-      // If the members panel happens to already be visible, refresh it too
-      if(document.getElementById('p-members').classList.contains('active')) renderM(cards);
-    });
+    refreshAll();   // load real data from MongoDB immediately on login
   } else {
-    const e=document.getElementById('lerr');
-    e.textContent='Invalid credentials.';
+    const e = document.getElementById('lerr');
+    e.textContent = 'Invalid credentials. Please try again.';
     document.getElementById('lp').classList.add('shake');
-    setTimeout(()=>{e.textContent='';document.getElementById('lp').classList.remove('shake');},2000);
+    setTimeout(()=>{ e.textContent=''; document.getElementById('lp').classList.remove('shake'); }, 2200);
   }
 }
 function logout(){
-  cards=[];  // clear in-memory cards on logout
+  cards = [];
   document.getElementById('app').classList.remove('on');
   document.getElementById('login-wrap').classList.remove('gone');
-  document.getElementById('lp').value='';
+  document.getElementById('lp').value = '';
 }
 
 // ════ NAV ════
-const ptitles={dashboard:'Dashboard',members:'All Members',create:'Create vCard',scans:'Scan Logs',branding:'Branding',settings:'Settings'};
-function go(page,btn){
-  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
-  if(btn)btn.classList.add('active');
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('p-'+page).classList.add('active');
-  document.getElementById('pt').textContent=ptitles[page]||page;
-  if(page==='members')renderM(cards);
-  if(page==='scans')renderScans();
-  if(page==='create'&&!editId)clearForm();
+const ptitles = { dashboard:'Dashboard', members:'All Members', create:'Create vCard', scans:'Scan Logs', branding:'Branding', settings:'Settings' };
+function go(page, btn){
+  document.querySelectorAll('.nb').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('p-' + page).classList.add('active');
+  document.getElementById('pt').textContent = ptitles[page] || page;
+  // Always re-fetch from backend when navigating to members or dashboard
+  if(page === 'members') fetchCards().then(() => renderM(cards));
+  if(page === 'dashboard') refreshAll();
+  if(page === 'scans')  renderScans();
+  if(page === 'create' && !editId) clearForm();
   document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sbo').style.display='none';
+  document.getElementById('sbo').style.display = 'none';
 }
 function toggleSB(){
-  const open=document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('sbo').style.display=open?'block':'none';
+  const open = document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sbo').style.display = open ? 'block' : 'none';
 }
 
 // ════ DASHBOARD ════
 function initDash(){
-  document.getElementById('st').textContent=cards.length;
-  document.getElementById('sa').textContent=cards.filter(c=>c.active).length;
-  document.getElementById('ss').textContent=cards.reduce((s,c)=>s+(c.scans||0),0);
-  document.getElementById('sv').textContent=Math.floor(Math.random()*10)+1;
+  document.getElementById('st').textContent = cards.length;
+  document.getElementById('sa').textContent = cards.filter(c => c.active).length;
+  document.getElementById('ss').textContent = cards.reduce((s,c) => s + (c.scans||0), 0);
+  document.getElementById('sv').textContent = Math.floor(Math.random()*10)+1;
   renderRecent();
   drawChart();
 }
-
 function renderRecent(){
-  const el=document.getElementById('rlist');
-  el.innerHTML=[...logs].reverse().slice(0,5).map(l=>`
-    <div class="ri"><div class="rdot"></div><div class="ri-i"><div class="ri-n">${l.name}</div><div class="ri-m">${l.dev} · ${l.br}</div></div><div class="ri-t">${l.time.split(' ')[1]||l.time}</div></div>
-  `).join('')||'<div style="color:var(--muted);font-size:13px;padding:16px">No activity yet</div>';
+  const el = document.getElementById('rlist');
+  el.innerHTML = [...logs].reverse().slice(0,5).map(l => `
+    <div class="ri"><div class="rdot"></div><div class="ri-i"><div class="ri-n">${l.name}</div><div class="ri-m">${l.dev} · ${l.br}</div></div><div class="ri-t">${(l.time||'').split(' ')[1]||l.time}</div></div>
+  `).join('') || '<div style="color:var(--muted);font-size:13px;padding:16px">No activity yet</div>';
 }
-
 function drawChart(){
-  const canvas=document.getElementById('scanChart');
-  if(!canvas)return;
-  const ctx=canvas.getContext('2d');
-  const W=canvas.offsetWidth||300,H=140;
-  canvas.width=W;canvas.height=H;
+  const canvas = document.getElementById('scanChart');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth||300, H = 140;
+  canvas.width = W; canvas.height = H;
   ctx.clearRect(0,0,W,H);
-  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const vals=[3,7,5,12,8,4,9];
-  const maxV=Math.max(...vals),n=days.length,bW=Math.floor(W/n)-8,pad=22;
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const vals = [3,7,5,12,8,4,9];
+  const maxV = Math.max(...vals), n = days.length, bW = Math.floor(W/n)-8, pad = 22;
   vals.forEach((v,i)=>{
-    const x=i*(W/n)+4,bh=((v/maxV)*(H-pad-18)),y=H-pad-bh;
+    const x=i*(W/n)+4, bh=((v/maxV)*(H-pad-18)), y=H-pad-bh;
     const gr=ctx.createLinearGradient(0,y,0,H-pad);
-    gr.addColorStop(0,'rgba(201,168,76,.85)');gr.addColorStop(1,'rgba(201,168,76,.12)');
-    ctx.fillStyle=gr;ctx.beginPath();ctx.roundRect(x,y,bW,bh,3);ctx.fill();
-    ctx.fillStyle='rgba(107,100,86,.8)';ctx.font='10px Outfit';ctx.textAlign='center';
-    ctx.fillText(days[i],x+bW/2,H-4);
+    gr.addColorStop(0,'rgba(201,168,76,.85)'); gr.addColorStop(1,'rgba(201,168,76,.12)');
+    ctx.fillStyle=gr; ctx.beginPath(); ctx.roundRect(x,y,bW,bh,3); ctx.fill();
+    ctx.fillStyle='rgba(107,100,86,.8)'; ctx.font='10px Outfit'; ctx.textAlign='center';
+    ctx.fillText(days[i], x+bW/2, H-4);
   });
 }
 
-// ════ MEMBERS ════
+// ════ MEMBERS TABLE ════
 function renderM(data){
-  const tb=document.getElementById('mtb');
-  if(!data.length){tb.innerHTML=`<tr><td colspan="6"><div class="es"><div style="font-size:32px;margin-bottom:10px">🪪</div>No members yet</div></td></tr>`;return;}
-  tb.innerHTML=data.map(c=>`<tr>
+  const tb = document.getElementById('mtb');
+  if(!data.length){
+    tb.innerHTML = `<tr><td colspan="6"><div class="es"><div style="font-size:32px;margin-bottom:10px">🪪</div>No members yet</div></td></tr>`;
+    return;
+  }
+  tb.innerHTML = data.map(c => `<tr>
     <td><div class="tdm">
-      <div class="tda">${c.avatar?`<img src="${c.avatar}">`:`${ini(c.name)}`}</div>
+      <div class="tda">${c.avatar ? `<img src="${c.avatar}">` : ini(c.name)}</div>
       <div><div class="tdn">${c.name}</div><div class="tdi">${c.id}</div></div>
     </div></td>
     <td>${c.cabinet||'<span style="color:var(--muted)">—</span>'}</td>
@@ -725,305 +733,369 @@ function renderM(data){
     <td><span class="badge bg">📡 ${c.scans||0}</span></td>
     <td style="font-size:11px;color:var(--muted2)">${c.lastScan||'—'}</td>
     <td><div class="ag">
-      <button class="ib" title="QR Code" onclick="openQRMd('${c.id}')">⬡</button>
-      <button class="ib" title="Edit" onclick="editCard('${c.id}')">✏️</button>
-      <button class="ib" title="Change password" onclick="openPWMd('${c.id}')">🔑</button>
+      <button class="ib" title="QR Code"          onclick="openQRMd('${c.id}')">⬡</button>
+      <button class="ib" title="Edit"             onclick="editCard('${c.id}')">✏️</button>
+      <button class="ib" title="Change password"  onclick="openPWMd('${c.id}')">🔑</button>
       <button class="ib" title="${c.active?'Deactivate':'Activate'}" onclick="togAct('${c.id}')">${c.active?'⏸':'▶'}</button>
-      <button class="ib dl" title="Delete" onclick="delCard('${c.id}')">🗑</button>
+      <button class="ib dl" title="Delete"        onclick="delCard('${c.id}')">🗑</button>
     </div></td>
   </tr>`).join('');
 }
-function filterM(q){renderM(cards.filter(c=>c.name.toLowerCase().includes(q.toLowerCase())||(c.id||'').toLowerCase().includes(q.toLowerCase())||(c.cabinet||'').toLowerCase().includes(q.toLowerCase())));}
-function togAct(id){const c=cards.find(x=>x.id===id);if(!c)return;c.active=!c.active;renderM(cards);toast(c.active?'Card activated':'Card deactivated',c.active?'ok':'info');}
-function delCard(id){if(!confirm('Delete this vCard?'))return;cards=cards.filter(c=>c.id!==id);renderM(cards);initDash();toast('Card deleted','err');}
+function filterM(q){
+  const lq = q.toLowerCase();
+  renderM(cards.filter(c =>
+    c.name.toLowerCase().includes(lq) ||
+    (c.id||'').toLowerCase().includes(lq) ||
+    (c.cabinet||'').toLowerCase().includes(lq)
+  ));
+}
 
-// ════ CREATE/EDIT ════
+// Toggle active — PATCH to backend, then refresh
+async function togAct(id){
+  const c = cards.find(x => x.id === id);
+  if(!c) return;
+  try {
+    // TODO: adjust endpoint if yours differs (e.g. PUT /api/cards/:id)
+    const res = await fetch(`/api/cards/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !c.active })
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    toast(c.active ? 'Card deactivated' : 'Card activated', c.active ? 'info' : 'ok');
+  } catch(err){
+    console.error('[KYLDS] togAct:', err);
+    toast('Could not update status on server.', 'err');
+  }
+  await refreshAll();
+}
+
+// Delete — DELETE to backend, then refresh
+async function delCard(id){
+  if(!confirm('Delete this vCard permanently? This cannot be undone.')) return;
+  try {
+    // TODO: adjust endpoint if yours differs (e.g. POST /api/cards/delete/:id)
+    const res = await fetch(`/api/cards/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    toast('Card deleted.', 'err');
+  } catch(err){
+    console.error('[KYLDS] delCard:', err);
+    toast('Could not delete card from server.', 'err');
+  }
+  await refreshAll();
+}
+
+// ════ CREATE / EDIT ════
 function clearForm(){
-  editId=null;photos={a:'',c:''};
-  document.getElementById('eid').value='';
-  ['fn','ft','fc','fid','fb','fem','fph','fw','fa','fli','ftw','fig','ffb','fps'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
-  document.getElementById('fact').checked=true;
-  ['ap','cvp'].forEach(i=>{const el=document.getElementById(i);if(el){el.style.display='none';el.src='';}});
-  document.getElementById('aph').style.display='block';
-  document.getElementById('cph').style.display='block';
-  document.getElementById('ra').style.display='none';
-  document.getElementById('rc').style.display='none';
-  document.getElementById('bdel').style.display='none';
-  document.getElementById('qrsec').style.display='none';
-  document.getElementById('qr-render').innerHTML='';
+  editId = null; photos = { a:'', c:'' };
+  document.getElementById('eid').value = '';
+  ['fn','ft','fc','fid','fb','fem','fph','fw','fa','fli','ftw','fig','ffb','fps'].forEach(i=>{
+    const el = document.getElementById(i); if(el) el.value = '';
+  });
+  document.getElementById('fact').checked = true;
+  ['ap','cvp'].forEach(i=>{ const el=document.getElementById(i); if(el){ el.style.display='none'; el.src=''; }});
+  document.getElementById('aph').style.display = 'block';
+  document.getElementById('cph').style.display = 'block';
+  document.getElementById('ra').style.display  = 'none';
+  document.getElementById('rc').style.display  = 'none';
+  document.getElementById('bdel').style.display = 'none';
+  document.getElementById('qrsec').style.display = 'none';
+  document.getElementById('qr-render').innerHTML = '';
   updPrev();
 }
 
 function editCard(id){
-  const c=cards.find(x=>x.id===id);if(!c)return;
-  editId=id;photos={a:c.avatar||'',c:c.cover||''};
-  document.getElementById('eid').value=id;
-  document.getElementById('fn').value=c.name||'';
-  document.getElementById('ft').value=c.title||'';
-  document.getElementById('fc').value=c.cabinet||'';
-  document.getElementById('fid').value=c.id||'';
-  document.getElementById('fb').value=c.bio||'';
-  document.getElementById('fem').value=c.email||'';
-  document.getElementById('fph').value=c.phone||'';
-  document.getElementById('fw').value=c.web||'';
-  document.getElementById('fa').value=c.addr||'';
-  document.getElementById('fli').value=c.li||'';
-  document.getElementById('ftw').value=c.tw||'';
-  document.getElementById('fig').value=c.ig||'';
-  document.getElementById('ffb').value=c.fb||'';
-  document.getElementById('fps').value=c.pass||'';
-  document.getElementById('fact').checked=c.active!==false;
-  document.getElementById('bdel').style.display='inline-flex';
-  if(c.avatar){const el=document.getElementById('ap');el.src=c.avatar;el.style.display='block';document.getElementById('aph').style.display='none';document.getElementById('ra').style.display='inline-block';}
-  if(c.cover){const el=document.getElementById('cvp');el.src=c.cover;el.style.display='block';document.getElementById('cph').style.display='none';document.getElementById('rc').style.display='inline-block';}
-  updPrev();genQR(c);
-  go('create',document.querySelectorAll('.nb')[2]);
+  const c = cards.find(x => x.id === id); if(!c) return;
+  editId = id; photos = { a: c.avatar||'', c: c.cover||'' };
+  document.getElementById('eid').value  = id;
+  document.getElementById('fn').value   = c.name    || '';
+  document.getElementById('ft').value   = c.title   || '';
+  document.getElementById('fc').value   = c.cabinet || '';
+  document.getElementById('fid').value  = c.id      || '';
+  document.getElementById('fb').value   = c.bio     || '';
+  document.getElementById('fem').value  = c.email   || '';
+  document.getElementById('fph').value  = c.phone   || '';
+  document.getElementById('fw').value   = c.web     || '';
+  document.getElementById('fa').value   = c.addr    || '';
+  document.getElementById('fli').value  = c.li      || '';
+  document.getElementById('ftw').value  = c.tw      || '';
+  document.getElementById('fig').value  = c.ig      || '';
+  document.getElementById('ffb').value  = c.fb      || '';
+  document.getElementById('fps').value  = c.pass    || '';
+  document.getElementById('fact').checked = c.active !== false;
+  document.getElementById('bdel').style.display = 'inline-flex';
+  if(c.avatar){ const el=document.getElementById('ap'); el.src=c.avatar; el.style.display='block'; document.getElementById('aph').style.display='none'; document.getElementById('ra').style.display='inline-block'; }
+  if(c.cover) { const el=document.getElementById('cvp'); el.src=c.cover; el.style.display='block'; document.getElementById('cph').style.display='none'; document.getElementById('rc').style.display='inline-block'; }
+  updPrev(); genQR(c);
+  go('create', document.querySelectorAll('.nb')[2]);
 }
 
-function saveCard(){
-  const name=document.getElementById('fn').value.trim();
-  if(!name){toast('Name is required!','err');return;}
-  const pass=document.getElementById('fps').value.trim();
-  const existingPass=editId?cards.find(c=>c.id===editId)?.pass||'':'';
-  if(!pass&&!existingPass){toast('Card password is required!','err');return;}
+// saveCard: POST to /api/cards/create (new) or PUT /api/cards/:id (edit),
+// then immediately refresh the list from MongoDB so UI always reflects DB state.
+async function saveCard(){
+  const name = document.getElementById('fn').value.trim();
+  if(!name){ toast('Name is required!', 'err'); return; }
 
-  // ── Build local object (unchanged behaviour) ──────────────────────────
-  const id=editId||document.getElementById('fid').value.trim()||genId();
-  const obj={
-    id,name,
-    title:document.getElementById('ft').value.trim(),
-    cabinet:document.getElementById('fc').value.trim(),
-    bio:document.getElementById('fb').value.trim(),
-    email:document.getElementById('fem').value.trim(),
-    phone:document.getElementById('fph').value.trim(),
-    web:document.getElementById('fw').value.trim(),
-    addr:document.getElementById('fa').value.trim(),
-    li:document.getElementById('fli').value.trim(),
-    tw:document.getElementById('ftw').value.trim(),
-    ig:document.getElementById('fig').value.trim(),
-    fb:document.getElementById('ffb').value.trim(),
-    pass:pass||existingPass,
-    active:document.getElementById('fact').checked,
-    avatar:photos.a,cover:photos.c,
-    scans:editId?(cards.find(c=>c.id===editId)?.scans||0):0,
-    lastScan:editId?(cards.find(c=>c.id===editId)?.lastScan||''):''
-  };
-  if(editId){const i=cards.findIndex(c=>c.id===editId);cards[i]=obj;}else{cards.unshift(obj);}
-  initDash();  // sv() removed — backend is source of truth
-  editId=obj.id;
-  document.getElementById('bdel').style.display='inline-flex';
-  genQR(obj);
-  toast('vCard saved!','ok');
+  const pass = document.getElementById('fps').value.trim();
+  const existingPass = editId ? (cards.find(c=>c.id===editId)?.pass||'') : '';
+  if(!pass && !existingPass){ toast('Card password is required!', 'err'); return; }
 
-  // ── POST to backend API ───────────────────────────────────────────────
-  // Map internal field names → API field names your Express route expects.
-  const payload={
-    name:          obj.name,
-    role:          obj.title,        // Designation / role
-    department:    obj.cabinet,      // Cabinet name
-    memberId:      obj.id,
-    bio:           obj.bio,
-    email:         obj.email,
-    phone:         obj.phone,
-    website:       obj.web,
-    address:       obj.addr,
-    password:      obj.pass,
-    active:        obj.active,
-    avatar:        obj.avatar || '', // base64 Data URL (empty string if none)
-    cover:         obj.cover  || '', // base64 Data URL (empty string if none)
-    social:{
-      linkedin:    obj.li,
-      twitter:     obj.tw,
-      instagram:   obj.ig,
-      facebook:    obj.fb
+  const id  = editId || document.getElementById('fid').value.trim() || genId();
+  const payload = {
+    name,
+    role:       document.getElementById('ft').value.trim(),   // your backend field name
+    department: document.getElementById('fc').value.trim(),   // your backend field name
+    memberId:   id,
+    bio:        document.getElementById('fb').value.trim(),
+    email:      document.getElementById('fem').value.trim(),
+    phone:      document.getElementById('fph').value.trim(),
+    website:    document.getElementById('fw').value.trim(),
+    address:    document.getElementById('fa').value.trim(),
+    password:   pass || existingPass,
+    active:     document.getElementById('fact').checked,
+    avatar:     photos.a || '',
+    cover:      photos.c || '',
+    social: {
+      linkedin:  document.getElementById('fli').value.trim(),
+      twitter:   document.getElementById('ftw').value.trim(),
+      instagram: document.getElementById('fig').value.trim(),
+      facebook:  document.getElementById('ffb').value.trim(),
     }
   };
 
-  // Disable save button while request is in flight
-  const saveBtn=document.querySelector('.fa .bgd');
-  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Saving…';}
+  const saveBtn = document.querySelector('.fa .bgd');
+  if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent='Saving…'; }
 
-  fetch('/api/cards/create',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(payload)
-  })
-  .then(async res=>{
-    const data=await res.json().catch(()=>({}));
+  try {
+    // Use PUT /api/cards/:id for edits, POST /api/cards/create for new cards.
+    // TODO: adjust if your edit endpoint differs.
+    const url    = editId ? `/api/cards/${encodeURIComponent(editId)}` : '/api/cards/create';
+    const method = editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(()=>({}));
     if(!res.ok){
-      // Server returned an error status
-      const msg=data.message||data.error||`Server error ${res.status}`;
-      alert(`❌ Failed to save card:\n${msg}`);
-      toast(msg,'err');
-    } else {
-      // Success — server should return the saved card with its _id / id
-      const cardId=data.id||data._id||data.cardId||obj.id;
-      const viewURL=`/public/view.html?id=${encodeURIComponent(cardId)}`;
-      alert(`✅ Card created!\n\nCard ID: ${cardId}\nView link: ${viewURL}`);
-      toast('Saved to server!','ok');
+      const msg = data.message || data.error || `Server error ${res.status}`;
+      toast(msg, 'err');
+      return;
     }
-  })
-  .catch(err=>{
-    // Network / CORS / connection error
-    console.error('[KYLDS] API error:',err);
-    alert(`❌ Could not reach the server.\n${err.message}\n\nThe card was saved locally but NOT persisted to the database.`);
-    toast('Server unreachable','err');
-  })
-  .finally(()=>{
-    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✦ Save vCard';}
-  });
+    // Derive the real ID the server assigned (could be _id from Mongo)
+    const savedId  = data.id || data._id || (data.card && (data.card.id||data.card._id)) || id;
+    const viewURL  = `/public/view.html?id=${encodeURIComponent(savedId)}`;
+    editId = savedId;   // keep edit context pointing at the real server ID
+    toast(editId ? 'Card updated!' : 'Card created!', 'ok');
+    // Re-generate QR with the real ID now that we have it from the server
+    const freshCard = norm({ ...payload, id: savedId, _id: savedId });
+    genQR(freshCard);
+    document.getElementById('bdel').style.display = 'inline-flex';
+    // Immediately re-fetch from DB so the members list/dashboard reflect reality
+    await refreshAll();
+  } catch(err){
+    console.error('[KYLDS] saveCard:', err);
+    toast('Could not reach the server. Check your connection.', 'err');
+  } finally {
+    if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent='✦ Save vCard'; }
+  }
 }
 
-function delCur(){if(!editId)return;delCard(editId);clearForm();go('members',document.querySelectorAll('.nb')[1]);}
-function genId(){return'KYLDS-'+String(cards.length+1).padStart(3,'0');}
-function genPas(){const w=['Kashmir','Valley','Kylds','Summit','Voices','Debate','2024'];document.getElementById('fps').value=w[Math.floor(Math.random()*w.length)]+Math.floor(Math.random()*9000+1000);}
+async function delCur(){
+  if(!editId) return;
+  await delCard(editId);
+  clearForm();
+  go('members', document.querySelectorAll('.nb')[1]);
+}
+
+function genId(){ return 'KYLDS-' + String(cards.length+1).padStart(3,'0'); }
+function genPas(){
+  const w = ['Kashmir','Valley','Kylds','Summit','Voices','Debate','2024'];
+  document.getElementById('fps').value = w[Math.floor(Math.random()*w.length)] + Math.floor(Math.random()*9000+1000);
+}
 
 // ════ PHOTOS ════
-function hPhoto(inp,type){
-  const f=inp.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=e=>{
-    photos[type]=e.target.result;
-    if(type==='a'){document.getElementById('ap').src=e.target.result;document.getElementById('ap').style.display='block';document.getElementById('aph').style.display='none';document.getElementById('ra').style.display='inline-block';}
-    else{document.getElementById('cvp').src=e.target.result;document.getElementById('cvp').style.display='block';document.getElementById('cph').style.display='none';document.getElementById('rc').style.display='inline-block';}
+function hPhoto(inp, type){
+  const f = inp.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    photos[type] = e.target.result;
+    if(type==='a'){ document.getElementById('ap').src=e.target.result; document.getElementById('ap').style.display='block'; document.getElementById('aph').style.display='none'; document.getElementById('ra').style.display='inline-block'; }
+    else           { document.getElementById('cvp').src=e.target.result; document.getElementById('cvp').style.display='block'; document.getElementById('cph').style.display='none'; document.getElementById('rc').style.display='inline-block'; }
     updPrev();
   };
   r.readAsDataURL(f);
 }
 function rPhoto(type){
-  photos[type]='';
-  if(type==='a'){document.getElementById('ap').style.display='none';document.getElementById('aph').style.display='block';document.getElementById('ra').style.display='none';}
-  else{document.getElementById('cvp').style.display='none';document.getElementById('cph').style.display='block';document.getElementById('rc').style.display='none';}
+  photos[type] = '';
+  if(type==='a'){ document.getElementById('ap').style.display='none'; document.getElementById('aph').style.display='block'; document.getElementById('ra').style.display='none'; }
+  else           { document.getElementById('cvp').style.display='none'; document.getElementById('cph').style.display='block'; document.getElementById('rc').style.display='none'; }
   updPrev();
 }
 
 // ════ LIVE PREVIEW ════
 function updPrev(){
-  const name=document.getElementById('fn')?.value||'Member Name';
-  const title=document.getElementById('ft')?.value||'';
-  const cab=document.getElementById('fc')?.value||'';
-  const email=document.getElementById('fem')?.value||'';
-  const phone=document.getElementById('fph')?.value||'';
-  document.getElementById('mnm').textContent=name||'Member Name';
-  document.getElementById('mti').textContent=title;
-  document.getElementById('mdt').textContent=cab;
-  const av=document.getElementById('mav');
-  if(photos.a){av.innerHTML=`<img src="${photos.a}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;}else{av.textContent=ini(name);}
-  document.getElementById('mcc').style.backgroundImage=photos.c?`url(${photos.c})`:'';
-  const mcl=document.getElementById('mcl');
-  mcl.innerHTML=[email?`<div class="mcli"><div class="mcdot"></div>${email}</div>`:'',phone?`<div class="mcli"><div class="mcdot"></div>${phone}</div>`:''].filter(Boolean).join('');
+  const name  = document.getElementById('fn')?.value  || 'Member Name';
+  const title = document.getElementById('ft')?.value  || '';
+  const cab   = document.getElementById('fc')?.value  || '';
+  const email = document.getElementById('fem')?.value || '';
+  const phone = document.getElementById('fph')?.value || '';
+  document.getElementById('mnm').textContent = name || 'Member Name';
+  document.getElementById('mti').textContent = title;
+  document.getElementById('mdt').textContent = cab;
+  const av = document.getElementById('mav');
+  if(photos.a){ av.innerHTML=`<img src="${photos.a}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
+  else { av.textContent = ini(name); }
+  document.getElementById('mcc').style.backgroundImage = photos.c ? `url(${photos.c})` : '';
+  const mcl = document.getElementById('mcl');
+  mcl.innerHTML = [
+    email ? `<div class="mcli"><div class="mcdot"></div>${email}</div>` : '',
+    phone ? `<div class="mcli"><div class="mcdot"></div>${phone}</div>` : '',
+  ].filter(Boolean).join('');
 }
 
 // ════ QR ════
-function getURL(card){const base=(brand.url||'view.html').replace(/\/$/, '');return`${base}?id=${encodeURIComponent(card.id)}`;}
+function getURL(card){
+  const base = (brand.url || '/public/view.html').replace(/\/$/, '');
+  return `${base}?id=${encodeURIComponent(card.id)}`;
+}
 function genQR(card){
-  const url=getURL(card);
-  const cont=document.getElementById('qr-render');
-  cont.innerHTML='';
-  new QRCode(cont,{text:url,width:148,height:148,colorDark:'#0A0A0A',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.H});
-  document.getElementById('qrurl').textContent=url;
-  document.getElementById('qrsec').style.display='block';
-  curQR=card;
+  const url  = getURL(card);
+  const cont = document.getElementById('qr-render');
+  cont.innerHTML = '';
+  new QRCode(cont, { text:url, width:148, height:148, colorDark:'#0A0A0A', colorLight:'#FFFFFF', correctLevel:QRCode.CorrectLevel.H });
+  document.getElementById('qrurl').textContent = url;
+  document.getElementById('qrsec').style.display = 'block';
+  curQR = card;
 }
 function dlQR(){
-  const img=document.querySelector('#qr-render img');
-  if(!img){toast('Save card first','info');return;}
-  const a=document.createElement('a');a.href=img.src;a.download=`KYLDS-QR-${curQR?.id||'card'}.png`;a.click();
+  const img = document.querySelector('#qr-render img');
+  if(!img){ toast('Save card first','info'); return; }
+  const a = document.createElement('a'); a.href=img.src; a.download=`KYLDS-QR-${curQR?.id||'card'}.png`; a.click();
 }
 function cpLink(){
-  if(!curQR){toast('Save card first','info');return;}
+  if(!curQR){ toast('Save card first','info'); return; }
   navigator.clipboard.writeText(getURL(curQR)).catch(()=>{});
   toast('Link copied!','ok');
 }
 function openQRMd(id){
-  const c=cards.find(x=>x.id===id);if(!c)return;
-  document.getElementById('mqrn').textContent=c.name;
-  const url=getURL(c);
-  document.getElementById('mqru').textContent=url;
-  const cont=document.getElementById('mqrr');
-  cont.innerHTML='';
-  new QRCode(cont,{text:url,width:176,height:176,colorDark:'#0A0A0A',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.H});
-  curQR=c;
+  const c = cards.find(x => x.id === id); if(!c) return;
+  document.getElementById('mqrn').textContent = c.name;
+  const url  = getURL(c);
+  document.getElementById('mqru').textContent = url;
+  const cont = document.getElementById('mqrr');
+  cont.innerHTML = '';
+  new QRCode(cont, { text:url, width:176, height:176, colorDark:'#0A0A0A', colorLight:'#FFFFFF', correctLevel:QRCode.CorrectLevel.H });
+  curQR = c;
   document.getElementById('mqr').classList.add('open');
 }
-function dlMQR(){const img=document.querySelector('#mqrr img');if(!img)return;const a=document.createElement('a');a.href=img.src;a.download=`KYLDS-QR-${curQR?.id||'card'}.png`;a.click();}
-function cpMLink(){if(!curQR)return;navigator.clipboard.writeText(getURL(curQR)).catch(()=>{});toast('Link copied!','ok');}
+function dlMQR(){ const img=document.querySelector('#mqrr img'); if(!img) return; const a=document.createElement('a'); a.href=img.src; a.download=`KYLDS-QR-${curQR?.id||'card'}.png`; a.click(); }
+function cpMLink(){ if(!curQR) return; navigator.clipboard.writeText(getURL(curQR)).catch(()=>{}); toast('Link copied!','ok'); }
 
 // ════ PASSWORD MODAL ════
+// Saves new password to the backend via PATCH, then refreshes.
 function openPWMd(id){
-  const c=cards.find(x=>x.id===id);if(!c)return;
-  mpwId=id;
-  document.getElementById('mpwn').textContent=c.name;
-  document.getElementById('mpwv').value=c.pass||'';
+  const c = cards.find(x => x.id === id); if(!c) return;
+  mpwId = id;
+  document.getElementById('mpwn').textContent = c.name;
+  document.getElementById('mpwv').value = '';  // never pre-fill password
   document.getElementById('mpw').classList.add('open');
 }
-function svMPW(){
-  const c=cards.find(x=>x.id===mpwId);if(!c)return;
-  const v=document.getElementById('mpwv').value.trim();
-  if(!v){toast('Enter a password','err');return;}
-  c.pass=v;closeMd('mpw');toast('Password updated!','ok');
+async function svMPW(){
+  const v = document.getElementById('mpwv').value.trim();
+  if(!v){ toast('Enter a password','err'); return; }
+  try {
+    // TODO: adjust endpoint if your backend uses a different route for password change
+    const res = await fetch(`/api/cards/${encodeURIComponent(mpwId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: v })
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    closeMd('mpw');
+    toast('Password updated!', 'ok');
+    await refreshAll();
+  } catch(err){
+    console.error('[KYLDS] svMPW:', err);
+    toast('Could not update password on server.', 'err');
+  }
 }
-function genMPas(){const w=['Kashmir','Valley','Kylds','Summit','2024'];document.getElementById('mpwv').value=w[Math.floor(Math.random()*w.length)]+Math.floor(Math.random()*9000+1000);}
-function closeMd(id){document.getElementById(id).classList.remove('open');}
+function genMPas(){
+  const w = ['Kashmir','Valley','Kylds','Summit','2024'];
+  document.getElementById('mpwv').value = w[Math.floor(Math.random()*w.length)] + Math.floor(Math.random()*9000+1000);
+}
+function closeMd(id){ document.getElementById(id).classList.remove('open'); }
 
 // ════ SCANS ════
 function renderScans(){
-  const tot=cards.reduce((s,c)=>s+(c.scans||0),0);
-  document.getElementById('lsum').innerHTML=`
+  const tot = cards.reduce((s,c) => s+(c.scans||0), 0);
+  document.getElementById('lsum').innerHTML = `
     <div class="li2"><div class="lic">📡</div><div class="lii"><div class="lin">Total Scans</div><div class="lim">All-time events</div></div><div style="font-family:var(--fs);font-size:26px;color:var(--gold)">${tot}</div></div>
     <div class="li2"><div class="lic">📱</div><div class="lii"><div class="lin">Mobile</div><div class="lim">Via mobile device</div></div><div style="font-family:var(--fs);font-size:26px;color:var(--gold)">${logs.filter(l=>l.dev==='Mobile').length}</div></div>
     <div class="li2"><div class="lic">🖥️</div><div class="lii"><div class="lin">Desktop</div><div class="lim">Via browser</div></div><div style="font-family:var(--fs);font-size:26px;color:var(--gold)">${logs.filter(l=>l.dev==='Desktop').length}</div></div>
     <div class="li2"><div class="lic">⏱️</div><div class="lii"><div class="lin">Last Scan</div><div class="lim">${logs.length?logs[logs.length-1].name:'—'}</div></div><div style="font-size:11px;color:var(--muted2)">${logs.length?logs[logs.length-1].time:'—'}</div></div>
   `;
-  document.getElementById('stb').innerHTML=[...logs].reverse().map(l=>`
+  document.getElementById('stb').innerHTML = [...logs].reverse().map(l => `
     <tr><td><strong>${l.name}</strong><div style="font-size:10px;color:var(--muted)">${l.id}</div></td><td style="font-size:11px">${l.time}</td><td><span class="badge bg">${l.dev}</span></td><td style="font-size:11px;color:var(--muted2)">${l.br}</td><td style="font-size:11px;color:var(--muted)">${l.ip}</td></tr>
-  `).join('')||'<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--muted)">No scan logs yet</td></tr>';
+  `).join('') || '<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--muted)">No scan logs yet</td></tr>';
 }
 function expLogs(){
-  const csv=[['Member','Card ID','Time','Device','Browser','IP'],...logs.map(l=>[l.name,l.id,l.time,l.dev,l.br,l.ip])].map(r=>r.join(',')).join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='kylds-scans.csv';a.click();
+  const csv = [['Member','Card ID','Time','Device','Browser','IP'], ...logs.map(l=>[l.name,l.id,l.time,l.dev,l.br,l.ip])].map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download='kylds-scans.csv'; a.click();
   toast('Exported!','ok');
 }
 
 // ════ BRANDING ════
 function svBrand(){
-  brand={name:document.getElementById('bnm')?.value||brand.name,abbr:document.getElementById('bab')?.value||brand.abbr,tag:document.getElementById('btg')?.value||brand.tag,url:document.getElementById('burl')?.value||brand.url};
-  localStorage.setItem('kb',JSON.stringify(brand));
+  brand = {
+    name: document.getElementById('bnm')?.value  || brand.name,
+    abbr: document.getElementById('bab')?.value  || brand.abbr,
+    tag:  document.getElementById('btg')?.value  || brand.tag,
+    url:  document.getElementById('burl')?.value || brand.url
+  };
+  localStorage.setItem('kb', JSON.stringify(brand));
 }
-function updUrlEx(){const base=document.getElementById('burl').value||'view.html';document.getElementById('urlex').textContent=base+'?id=KYLDS-001';}
-function hLogo(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{localStorage.setItem('kylds_logo',e.target.result);document.getElementById('blp').src=e.target.result;document.getElementById('blp').style.display='block';document.getElementById('bld').style.display='none';toast('Logo saved!','ok');};r.readAsDataURL(f);}
-function hWM(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{localStorage.setItem('kylds_wm',e.target.result);document.getElementById('bwp').src=e.target.result;document.getElementById('bwp').style.display='block';document.getElementById('bwd').style.display='none';toast('Watermark saved!','ok');};r.readAsDataURL(f);}
+function updUrlEx(){ const base=document.getElementById('burl').value||'view.html'; document.getElementById('urlex').textContent=base+'?id=KYLDS-001'; }
+function hLogo(inp){ const f=inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=e=>{ localStorage.setItem('kylds_logo',e.target.result); document.getElementById('blp').src=e.target.result; document.getElementById('blp').style.display='block'; document.getElementById('bld').style.display='none'; toast('Logo saved!','ok'); }; r.readAsDataURL(f); }
+function hWM(inp)  { const f=inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=e=>{ localStorage.setItem('kylds_wm',e.target.result); document.getElementById('bwp').src=e.target.result; document.getElementById('bwp').style.display='block'; document.getElementById('bwd').style.display='none'; toast('Watermark saved!','ok'); }; r.readAsDataURL(f); }
 
 // ════ SETTINGS ════
 function chgAdmPass(){
-  const cur=document.getElementById('sc').value,nw=document.getElementById('sn').value,cf=document.getElementById('scf').value;
-  if(cur!==ADM){toast('Current password wrong','err');return;}
-  if(nw!==cf){toast("Passwords don't match",'err');return;}
-  if(nw.length<6){toast('Min 6 characters','err');return;}
-  ADM=nw;toast('Admin password updated!','ok');
-  ['sc','sn','scf'].forEach(i=>document.getElementById(i).value='');
+  const cur=document.getElementById('sc').value, nw=document.getElementById('sn').value, cf=document.getElementById('scf').value;
+  if(cur!==ADM)        { toast('Current password is incorrect.','err'); return; }
+  if(nw!==cf)          { toast("New passwords don't match.",'err'); return; }
+  if(nw.length<6)      { toast('Minimum 6 characters required.','err'); return; }
+  ADM = nw;
+  toast('Admin password updated!','ok');
+  ['sc','sn','scf'].forEach(i => document.getElementById(i).value='');
 }
 function expAll(){
-  const d=JSON.stringify({cards,logs,brand},null,2);
-  const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(d);a.download='kylds-export.json';a.click();
+  const d = JSON.stringify({ cards, logs, brand }, null, 2);
+  const a = document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(d); a.download='kylds-export.json'; a.click();
   toast('Data exported!','ok');
 }
 
 // ════ THEME ════
-function toggleTheme(){document.body.classList.toggle('light');const dt=document.getElementById('dtog');if(dt)dt.checked=!document.body.classList.contains('light');}
-
-// ════ TOAST ════
-function toast(msg,type='info'){
-  const wrap=document.getElementById('tws');
-  const t=document.createElement('div');t.className='tst';
-  t.innerHTML=`<div class="td2 ${type}"></div><span>${msg}</span>`;
-  wrap.appendChild(t);
-  setTimeout(()=>t.classList.add('show'),10);
-  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),400);},3000);
+function toggleTheme(){
+  document.body.classList.toggle('light');
+  const dt = document.getElementById('dtog');
+  if(dt) dt.checked = !document.body.classList.contains('light');
 }
 
-// close modals on bg click
-document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');}));
+// ════ TOAST ════
+function toast(msg, type='info'){
+  const wrap = document.getElementById('tws');
+  const t = document.createElement('div'); t.className='tst';
+  t.innerHTML = `<div class="td2 ${type}"></div><span>${msg}</span>`;
+  wrap.appendChild(t);
+  setTimeout(()=>t.classList.add('show'), 10);
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),400); }, 3200);
+}
+
+// Close modals when clicking the dark backdrop
+document.querySelectorAll('.mbg').forEach(bg => bg.addEventListener('click', e=>{ if(e.target===bg) bg.classList.remove('open'); }));
+
+// Init live preview on load
 updPrev();
 </script>
 </body>
