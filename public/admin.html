@@ -176,8 +176,8 @@ body>*{position:relative;z-index:1}
 /* QR BOX */
 .qrb{margin-top:14px;background:var(--dark3);border:1px solid var(--border);border-radius:var(--r);padding:14px;text-align:center}
 .qrb h4{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);margin-bottom:10px}
-#qr-render{display:flex;justify-content:center;margin-bottom:9px}
-#qr-render>div{border-radius:7px;overflow:hidden;padding:7px;background:white}
+#qr-render{display:flex;justify-content:center;margin-bottom:9px;background:transparent}
+#qr-render>div{border-radius:8px;overflow:visible;box-shadow:0 4px 20px rgba(0,0,0,.5)}
 .qr-url{font-size:10px;color:var(--muted);word-break:break-all;margin-bottom:9px}
 .qa{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
 
@@ -956,18 +956,36 @@ function updPrev(){
 
 // ════ QR ════
 function getURL(card){
-  const base = brand.url?.trim() || '/public/view.html';
-  let url =
-    base.startsWith('http')
-      ? base
-      : `${location.origin.replace(/\/$/, '')}${base.startsWith('/') ? '' : '/'}${base}`;
-  return `${url}?id=${encodeURIComponent(card.id || card._id)}`;
+  // Always build a full absolute URL so QR codes work on any device / network.
+  const rawBase = (brand.url || '').trim() || '/public/view.html';
+  let base;
+  if(rawBase.startsWith('http://') || rawBase.startsWith('https://')){
+    // Already absolute — use as-is (strip trailing slash before appending query)
+    base = rawBase.replace(/\/$/, '');
+  } else {
+    // Relative path — prefix with current origin
+    const path = rawBase.startsWith('/') ? rawBase : '/' + rawBase;
+    base = location.origin.replace(/\/$/, '') + path;
+  }
+  const cardId = encodeURIComponent(card.id || card._id || '');
+  return `${base}?id=${cardId}`;
 }
 function genQR(card){
   const url  = getURL(card);
   const cont = document.getElementById('qr-render');
   cont.innerHTML = '';
-  new QRCode(cont, { text:url, width:148, height:148, colorDark:'#0A0A0A', colorLight:'#FFFFFF', correctLevel:QRCode.CorrectLevel.H });
+  // Wrap in a white padded div so the QR quiet-zone is always intact
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'background:#fff;padding:10px;border-radius:8px;display:inline-block;line-height:0';
+  cont.appendChild(wrapper);
+  new QRCode(wrapper, {
+    text: url,
+    width: 148,
+    height: 148,
+    colorDark: '#000000',
+    colorLight: '#FFFFFF',
+    correctLevel: QRCode.CorrectLevel.H
+  });
   document.getElementById('qrurl').textContent = url;
   document.getElementById('qrsec').style.display = 'block';
   curQR = card;
@@ -989,7 +1007,10 @@ function openQRMd(id){
   document.getElementById('mqru').textContent = url;
   const cont = document.getElementById('mqrr');
   cont.innerHTML = '';
-  new QRCode(cont, { text:url, width:176, height:176, colorDark:'#0A0A0A', colorLight:'#FFFFFF', correctLevel:QRCode.CorrectLevel.H });
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'background:#fff;padding:10px;border-radius:8px;display:inline-block;line-height:0';
+  cont.appendChild(wrapper);
+  new QRCode(wrapper, { text:url, width:176, height:176, colorDark:'#000000', colorLight:'#FFFFFF', correctLevel:QRCode.CorrectLevel.H });
   curQR = c;
   document.getElementById('mqr').classList.add('open');
 }
