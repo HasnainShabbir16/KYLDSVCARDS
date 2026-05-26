@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 
-// Card Schema
+// Card Schema (updated for bio/address)
 const CardSchema = new mongoose.Schema({
   name: String,
   role: String,
@@ -12,7 +12,19 @@ const CardSchema = new mongoose.Schema({
   phone: String,
   email: String,
   password: String,
-  // add other member fields as needed
+  bio: {
+    type: String,
+    default: ''
+  },
+  address: {
+    type: String,
+    default: ''
+  },
+  active: {
+    type: Boolean,
+    default: true
+  }
+  // ...add other member fields as needed
 });
 
 const Card = mongoose.model('Card', CardSchema);
@@ -20,13 +32,27 @@ const Card = mongoose.model('Card', CardSchema);
 // Create a new card
 router.post('/create', async (req, res) => {
   try {
-    const card = new Card(req.body);
+    const card = new Card({
+      name: req.body.name,
+      role: req.body.role,
+      department: req.body.department,
+      avatar: req.body.avatar,
+      cover: req.body.cover,
+      phone: req.body.phone,
+      email: req.body.email,
+      password: req.body.password,
+      bio: req.body.bio || '',
+      address: req.body.address || '',
+      active: typeof req.body.active === 'boolean' ? req.body.active : true,
+      // ...any other fields
+    });
     await card.save();
     res.json({ success: true, card });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 // List all cards (for admin)
 router.get('/', async (req, res) => {
   try {
@@ -36,25 +62,34 @@ router.get('/', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 // Update an existing card
 router.put('/update/:id', async (req, res) => {
   try {
-    const updated = await Card.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updated = await Card.findByIdAndUpdate(
+      req.params.id,
+      {
+        name: req.body.name,
+        role: req.body.role,
+        department: req.body.department,
+        avatar: req.body.avatar,
+        cover: req.body.cover,
+        phone: req.body.phone,
+        email: req.body.email,
+        password: req.body.password,
+        bio: req.body.bio || '',
+        address: req.body.address || '',
+        active: typeof req.body.active === 'boolean' ? req.body.active : true,
+        // ...any other fields
+      },
+      { new: true }
+    );
     res.json({ success: true, card: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Get card by ID (password not required for basic info)
-router.get('/', async (req, res) => {
-  try {
-    const cards = await Card.find({}).lean();
-    res.json({ success: true, cards });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 // Delete card by ID
 router.delete('/:id', async (req, res) => {
   try {
@@ -67,17 +102,19 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-// Get a card by its Mongo ObjectId
+
+// Get a card by its Mongo ObjectId (single card, password not required for basic info)
 router.get('/get/:id', async (req, res) => {
   try {
     const card = await Card.findById(req.params.id).lean();
     if (!card) return res.status(404).json({ success: false, error: 'Card not found' });
-    const { password, ...rest } = card; // exclude password
+    const { password, ...rest } = card; // exclude password from response
     res.json({ success: true, card: rest });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 // Unlock card by ID and password (for view.html)
 router.post('/unlock/:id', async (req, res) => {
   try {
