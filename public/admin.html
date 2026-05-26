@@ -173,6 +173,30 @@ body>*{position:relative;z-index:1}
 .mcdot{width:3px;height:3px;border-radius:50%;background:var(--gold);flex-shrink:0}
 .mwm{position:absolute;bottom:7px;right:9px;font-size:8px;color:rgba(201,168,76,.18);letter-spacing:1.5px;text-transform:uppercase;font-weight:600}
 
+/* ── INLINE PHOTO EDITOR ── */
+.photo-editor{background:var(--dark3);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:6px}
+.pe-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
+.pe-canvas-wrap{position:relative;overflow:hidden;cursor:grab;user-select:none;touch-action:none;background:#000}
+.pe-canvas-wrap:active{cursor:grabbing}
+.pe-canvas-wrap canvas{display:block;width:100%}
+.pe-controls{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.pe-ctrl{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted2)}
+.pe-ctrl span{min-width:38px;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--gold)}
+.pe-ctrl input[type=range]{flex:1;accent-color:var(--gold);height:3px;cursor:pointer}
+.pe-actions{display:flex;gap:6px;padding:0 12px 10px}
+.pe-btn{flex:1;padding:7px 10px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;border:none;transition:all .2s;letter-spacing:.3px}
+.pe-btn.apply{background:linear-gradient(135deg,var(--gold-d),var(--gold));color:#0A0A0A}
+.pe-btn.apply:hover{box-shadow:0 4px 12px rgba(201,168,76,.35)}
+.pe-btn.reset{background:transparent;border:1px solid var(--border);color:var(--muted2)}
+.pe-btn.reset:hover{border-color:var(--border2);color:var(--gold)}
+.pe-result-wrap{padding:0 12px 10px;display:none}
+.pe-result-wrap.shown{display:block}
+.pe-result-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.pe-result-img{width:100%;border-radius:var(--r2);object-fit:cover;border:1px solid var(--border)}
+.pe-result-img.circle{border-radius:50%;width:72px;height:72px;display:block;margin:0 auto}
+/* Branding upload zone preview */
+.bprev{max-width:100%;max-height:80px;object-fit:contain;margin:8px auto 0;display:block;border-radius:var(--r2);border:1px solid var(--border)}
+
 /* QR BOX */
 .qrb{margin-top:14px;background:var(--dark3);border:1px solid var(--border);border-radius:var(--r);padding:14px;text-align:center}
 .qrb h4{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);margin-bottom:10px}
@@ -363,24 +387,69 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
             <div class="fsec">
               <div class="fst">📸 Photos</div>
               <div class="fg2">
+
+                <!-- PROFILE PICTURE -->
                 <div class="fg">
                   <label>Profile Picture</label>
-                  <div class="pz" id="az" onclick="document.getElementById('ai').click()">
-                    <img class="pp" id="ap" src="" style="display:none">
-                    <div id="aph"><div class="pi">🖼️</div><p>Upload photo<br><small>JPG, PNG</small></p></div>
-                    <input type="file" id="ai" accept="image/*" onchange="hPhoto(this,'a')" style="display:none">
+                  <!-- Upload trigger (hidden when editor active) -->
+                  <div class="pz" id="az-trigger" onclick="document.getElementById('ai').click()">
+                    <div class="pi">🖼️</div><p>Click or drag to upload<br><small>JPG, PNG</small></p>
                   </div>
-                  <span class="rph" style="display:none" id="ra" onclick="rPhoto('a')">✕ Remove</span>
+                  <input type="file" id="ai" accept="image/*" onchange="openPhotoEditor(this,'avatar')" style="display:none">
+                  <!-- Inline editor (shown after file chosen) -->
+                  <div class="photo-editor" id="pe-avatar" style="display:none">
+                    <div class="pe-header">
+                      <span>✎ Adjust Photo</span>
+                      <span class="rph" style="margin:0;cursor:pointer" onclick="resetEditor('avatar')">✕ Remove</span>
+                    </div>
+                    <div class="pe-canvas-wrap" id="pe-avatar-wrap" style="height:160px"
+                         onmousedown="startDrag(event,'avatar')" ontouchstart="startDrag(event,'avatar')">
+                      <canvas id="pe-avatar-canvas"></canvas>
+                    </div>
+                    <div class="pe-controls">
+                      <div class="pe-ctrl"><span>Zoom</span><input type="range" id="pe-avatar-zoom" min="10" max="300" value="100" oninput="redrawEditor('avatar')"></div>
+                    </div>
+                    <div class="pe-actions">
+                      <button class="pe-btn apply" onclick="cropAndApply('avatar')">✓ Crop &amp; Apply</button>
+                      <button class="pe-btn reset" onclick="resetEditor('avatar')">✕ Clear</button>
+                    </div>
+                    <div class="pe-result-wrap circle" id="pe-avatar-result-wrap">
+                      <div class="pe-result-lbl">Cropped Preview</div>
+                      <img class="pe-result-img circle" id="pe-avatar-result" src="" alt="">
+                    </div>
+                  </div>
                 </div>
+
+                <!-- COVER / BANNER -->
                 <div class="fg">
                   <label>Cover / Banner</label>
-                  <div class="pz" id="cz" onclick="document.getElementById('ci').click()">
-                    <img class="cp" id="cvp" src="" style="display:none">
-                    <div id="cph"><div class="pi">🏞️</div><p>Upload banner<br><small>Landscape</small></p></div>
-                    <input type="file" id="ci" accept="image/*" onchange="hPhoto(this,'c')" style="display:none">
+                  <div class="pz" id="cz-trigger" onclick="document.getElementById('ci').click()">
+                    <div class="pi">🏞️</div><p>Click or drag to upload<br><small>Landscape recommended</small></p>
                   </div>
-                  <span class="rph" style="display:none" id="rc" onclick="rPhoto('c')">✕ Remove</span>
+                  <input type="file" id="ci" accept="image/*" onchange="openPhotoEditor(this,'cover')" style="display:none">
+                  <div class="photo-editor" id="pe-cover" style="display:none">
+                    <div class="pe-header">
+                      <span>✎ Adjust Banner</span>
+                      <span class="rph" style="margin:0;cursor:pointer" onclick="resetEditor('cover')">✕ Remove</span>
+                    </div>
+                    <div class="pe-canvas-wrap" id="pe-cover-wrap" style="height:110px"
+                         onmousedown="startDrag(event,'cover')" ontouchstart="startDrag(event,'cover')">
+                      <canvas id="pe-cover-canvas"></canvas>
+                    </div>
+                    <div class="pe-controls">
+                      <div class="pe-ctrl"><span>Zoom</span><input type="range" id="pe-cover-zoom" min="10" max="300" value="100" oninput="redrawEditor('cover')"></div>
+                    </div>
+                    <div class="pe-actions">
+                      <button class="pe-btn apply" onclick="cropAndApply('cover')">✓ Crop &amp; Apply</button>
+                      <button class="pe-btn reset" onclick="resetEditor('cover')">✕ Clear</button>
+                    </div>
+                    <div class="pe-result-wrap" id="pe-cover-result-wrap">
+                      <div class="pe-result-lbl">Cropped Preview</div>
+                      <img class="pe-result-img" id="pe-cover-result" src="" alt="" style="max-height:70px;object-fit:cover">
+                    </div>
+                  </div>
                 </div>
+
               </div>
             </div>
 
@@ -450,6 +519,7 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
                 <div class="mn" id="mnm">Member Name</div>
                 <div class="mti" id="mti"></div>
                 <div class="mdt" id="mdt"></div>
+                <div id="mbio" style="display:none;font-size:8px;color:var(--muted2);font-style:italic;margin:4px 0 6px;line-height:1.4;overflow:hidden;max-height:28px;text-overflow:ellipsis"></div>
                 <div class="mcl" id="mcl"></div>
                 <div class="mwm">KYLDS • Verified</div>
               </div>
@@ -488,11 +558,63 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
       <div class="bgrid">
         <div class="bbox">
           <h3>Society Logo</h3>
-          <div class="luz"><input type="file" accept="image/*" onchange="hLogo(this)"><img id="blp" class="lp" src="" style="display:none"><div id="bld"><div style="font-size:28px">🏛️</div><p style="font-size:12px;color:var(--muted);margin-top:7px">Upload KYLDS Logo<br><small>PNG transparent recommended</small></p></div></div>
+          <p style="font-size:12px;color:var(--muted2);margin-bottom:12px">Displayed on member cards as a cover logo. PNG with transparency recommended.</p>
+          <!-- Upload trigger -->
+          <div class="luz" id="logo-trigger">
+            <input type="file" accept="image/*" onchange="openBrandEditor(this,'logo')">
+            <div id="bld"><div style="font-size:28px">🏛️</div><p style="font-size:12px;color:var(--muted);margin-top:7px">Upload KYLDS Logo<br><small>PNG transparent recommended</small></p></div>
+          </div>
+          <!-- Inline editor -->
+          <div class="photo-editor" id="pe-logo" style="display:none;margin-top:10px">
+            <div class="pe-header">
+              <span>✎ Adjust Logo</span>
+              <span class="rph" style="margin:0;cursor:pointer" onclick="resetBrandEditor('logo')">✕ Remove</span>
+            </div>
+            <div class="pe-canvas-wrap" id="pe-logo-wrap" style="height:100px;background:repeating-conic-gradient(#333 0% 25%,#222 0% 50%) 0 0 / 12px 12px"
+                 onmousedown="startDrag(event,'logo')" ontouchstart="startDrag(event,'logo')">
+              <canvas id="pe-logo-canvas"></canvas>
+            </div>
+            <div class="pe-controls">
+              <div class="pe-ctrl"><span>Zoom</span><input type="range" id="pe-logo-zoom" min="10" max="300" value="100" oninput="redrawEditor('logo')"></div>
+            </div>
+            <div class="pe-actions">
+              <button class="pe-btn apply" onclick="cropAndApply('logo')">✓ Apply Logo</button>
+              <button class="pe-btn reset" onclick="resetBrandEditor('logo')">✕ Clear</button>
+            </div>
+            <div class="pe-result-wrap" id="pe-logo-result-wrap">
+              <div class="pe-result-lbl">Preview</div>
+              <img class="bprev" id="pe-logo-result" src="" alt="">
+            </div>
+          </div>
         </div>
         <div class="bbox">
-          <h3>Watermark Image</h3>
-          <div class="luz"><input type="file" accept="image/*" onchange="hWM(this)"><img id="bwp" class="lp" src="" style="display:none"><div id="bwd"><div style="font-size:28px">💧</div><p style="font-size:12px;color:var(--muted);margin-top:7px">Upload Watermark<br><small>Shown on view pages</small></p></div></div>
+          <h3>Watermark / Banner</h3>
+          <p style="font-size:12px;color:var(--muted2);margin-bottom:12px">Used as a subtle watermark on member cards.</p>
+          <div class="luz" id="wm-trigger">
+            <input type="file" accept="image/*" onchange="openBrandEditor(this,'wm')">
+            <div id="bwd"><div style="font-size:28px">💧</div><p style="font-size:12px;color:var(--muted);margin-top:7px">Upload Watermark<br><small>Shown on view pages</small></p></div>
+          </div>
+          <div class="photo-editor" id="pe-wm" style="display:none;margin-top:10px">
+            <div class="pe-header">
+              <span>✎ Adjust Watermark</span>
+              <span class="rph" style="margin:0;cursor:pointer" onclick="resetBrandEditor('wm')">✕ Remove</span>
+            </div>
+            <div class="pe-canvas-wrap" id="pe-wm-wrap" style="height:100px;background:repeating-conic-gradient(#333 0% 25%,#222 0% 50%) 0 0 / 12px 12px"
+                 onmousedown="startDrag(event,'wm')" ontouchstart="startDrag(event,'wm')">
+              <canvas id="pe-wm-canvas"></canvas>
+            </div>
+            <div class="pe-controls">
+              <div class="pe-ctrl"><span>Zoom</span><input type="range" id="pe-wm-zoom" min="10" max="300" value="100" oninput="redrawEditor('wm')"></div>
+            </div>
+            <div class="pe-actions">
+              <button class="pe-btn apply" onclick="cropAndApply('wm')">✓ Apply Watermark</button>
+              <button class="pe-btn reset" onclick="resetBrandEditor('wm')">✕ Clear</button>
+            </div>
+            <div class="pe-result-wrap" id="pe-wm-result-wrap">
+              <div class="pe-result-lbl">Preview</div>
+              <img class="bprev" id="pe-wm-result" src="" alt="">
+            </div>
+          </div>
         </div>
         <div class="bbox">
           <h3>Society Information</h3>
@@ -579,11 +701,12 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
 let ADM = localStorage.getItem('kylds_adm_pass') || 'admin123';
 
 // ════ STATE ════
-// cards[] is ALWAYS sourced from the backend — never from localStorage.
+// cards[] and all card data come from the backend only — never localStorage.
 let cards = [];
 let logs  = JSON.parse(localStorage.getItem('kl') || '[]');
 let brand = JSON.parse(localStorage.getItem('kb') || '{"name":"Kashmir Youth Literary and Debating Society","abbr":"KYLDS","tag":"Voices of the Valley","url":"/public/view.html"}');
-let photos  = { a: '', c: '' };
+let photos      = { a: '', c: '' };      // card avatar + cover dataURLs (set by editor)
+let brandPhotos = { logo: '', wm: '' };  // branding logo + watermark dataURLs (set by editor)
 let editId  = null, curQR = null, mpwId = null;
 
 // sv() intentionally left as no-op — all card persistence is via the API.
@@ -797,11 +920,17 @@ function clearForm(){
     const el = document.getElementById(i); if(el) el.value = '';
   });
   document.getElementById('fact').checked = true;
-  ['ap','cvp'].forEach(i=>{ const el=document.getElementById(i); if(el){ el.style.display='none'; el.src=''; }});
-  document.getElementById('aph').style.display = 'block';
-  document.getElementById('cph').style.display = 'block';
-  document.getElementById('ra').style.display  = 'none';
-  document.getElementById('rc').style.display  = 'none';
+  // Reset inline editors
+  ['avatar','cover'].forEach(type => {
+    const trigId = type==='avatar' ? 'az-trigger' : 'cz-trigger';
+    const trig = document.getElementById(trigId);
+    if(trig) trig.style.display = '';
+    const ed = document.getElementById('pe-'+type);
+    if(ed) ed.style.display = 'none';
+    const rw = document.getElementById('pe-'+type+'-result-wrap');
+    if(rw) rw.classList.remove('shown');
+    delete _pe[type];
+  });
   document.getElementById('bdel').style.display = 'none';
   document.getElementById('qrsec').style.display = 'none';
   document.getElementById('qr-render').innerHTML = '';
@@ -828,8 +957,36 @@ function editCard(id){
   document.getElementById('fps').value  = c.pass    || '';
   document.getElementById('fact').checked = c.active !== false;
   document.getElementById('bdel').style.display = 'inline-flex';
-  if(c.avatar){ const el=document.getElementById('ap'); el.src=c.avatar; el.style.display='block'; document.getElementById('aph').style.display='none'; document.getElementById('ra').style.display='inline-block'; }
-  if(c.cover) { const el=document.getElementById('cvp'); el.src=c.cover; el.style.display='block'; document.getElementById('cph').style.display='none'; document.getElementById('rc').style.display='inline-block'; }
+  // Load existing images into the inline editors
+  if(c.avatar){
+    photos.a = c.avatar;
+    const avImg = new Image();
+    avImg.onload = () => {
+      _pe['avatar'] = { img:avImg, x:0, y:0, zoom:100, dragging:false, startX:0, startY:0, ox:0, oy:0 };
+      document.getElementById('az-trigger').style.display = 'none';
+      document.getElementById('pe-avatar').style.display = 'block';
+      document.getElementById('pe-avatar-zoom').value = 100;
+      fitImage('avatar'); redrawEditor('avatar');
+      // Show result preview
+      document.getElementById('pe-avatar-result').src = c.avatar;
+      document.getElementById('pe-avatar-result-wrap').classList.add('shown');
+    };
+    avImg.src = c.avatar;
+  }
+  if(c.cover){
+    photos.c = c.cover;
+    const cvImg = new Image();
+    cvImg.onload = () => {
+      _pe['cover'] = { img:cvImg, x:0, y:0, zoom:100, dragging:false, startX:0, startY:0, ox:0, oy:0 };
+      document.getElementById('cz-trigger').style.display = 'none';
+      document.getElementById('pe-cover').style.display = 'block';
+      document.getElementById('pe-cover-zoom').value = 100;
+      fitImage('cover'); redrawEditor('cover');
+      document.getElementById('pe-cover-result').src = c.cover;
+      document.getElementById('pe-cover-result-wrap').classList.add('shown');
+    };
+    cvImg.src = c.cover;
+  }
   updPrev(); genQR(c);
   go('create', document.querySelectorAll('.nb')[2]);
 }
@@ -918,23 +1075,158 @@ function genPas(){
   document.getElementById('fps').value = w[Math.floor(Math.random()*w.length)] + Math.floor(Math.random()*9000+1000);
 }
 
-// ════ PHOTOS ════
-function hPhoto(inp, type){
+// ════ INLINE PHOTO EDITOR ENGINE ════
+// Supports: 'avatar', 'cover' (card photos) and 'logo', 'wm' (branding)
+// Each editor: load image → drag to reposition → zoom slider → Crop & Apply → renders to canvas → stores dataURL
+
+const _pe = {}; // per-type state: { img, x, y, zoom, dragging, startX, startY, ox, oy }
+
+function openPhotoEditor(inp, type){
   const f = inp.files[0]; if(!f) return;
-  const r = new FileReader();
-  r.onload = e => {
-    photos[type] = e.target.result;
-    if(type==='a'){ document.getElementById('ap').src=e.target.result; document.getElementById('ap').style.display='block'; document.getElementById('aph').style.display='none'; document.getElementById('ra').style.display='inline-block'; }
-    else           { document.getElementById('cvp').src=e.target.result; document.getElementById('cvp').style.display='block'; document.getElementById('cph').style.display='none'; document.getElementById('rc').style.display='inline-block'; }
-    updPrev();
+  inp.value = '';  // allow re-selecting same file
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      _pe[type] = { img, x:0, y:0, zoom:100, dragging:false, startX:0, startY:0, ox:0, oy:0 };
+      // Show editor, hide trigger
+      const trigId = type==='avatar' ? 'az-trigger' : 'cz-trigger';
+      document.getElementById(trigId).style.display = 'none';
+      document.getElementById('pe-'+type).style.display = 'block';
+      // Reset zoom slider
+      document.getElementById('pe-'+type+'-zoom').value = 100;
+      // Fit image into canvas on first open
+      fitImage(type);
+      redrawEditor(type);
+    };
+    img.src = ev.target.result;
   };
-  r.readAsDataURL(f);
+  reader.readAsDataURL(f);
 }
-function rPhoto(type){
-  photos[type] = '';
-  if(type==='a'){ document.getElementById('ap').style.display='none'; document.getElementById('aph').style.display='block'; document.getElementById('ra').style.display='none'; }
-  else           { document.getElementById('cvp').style.display='none'; document.getElementById('cph').style.display='block'; document.getElementById('rc').style.display='none'; }
+
+function openBrandEditor(inp, type){
+  // type: 'logo' or 'wm'
+  const f = inp.files[0]; if(!f) return;
+  inp.value = '';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      _pe[type] = { img, x:0, y:0, zoom:100, dragging:false, startX:0, startY:0, ox:0, oy:0 };
+      const triggerId = type==='logo' ? 'logo-trigger' : 'wm-trigger';
+      document.getElementById(triggerId).style.display = 'none';
+      document.getElementById('pe-'+type).style.display = 'block';
+      document.getElementById('pe-'+type+'-zoom').value = 100;
+      fitImage(type);
+      redrawEditor(type);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+}
+
+function fitImage(type){
+  // Auto-fit: set zoom so the image fills the canvas area
+  const wrap = document.getElementById('pe-'+type+'-wrap');
+  const st = _pe[type];
+  const wW = wrap.clientWidth || 280, wH = wrap.clientHeight || 160;
+  const iW = st.img.naturalWidth, iH = st.img.naturalHeight;
+  const scale = Math.max(wW/iW, wH/iH) * 100;
+  st.zoom = Math.min(300, Math.max(10, Math.round(scale)));
+  st.x = 0; st.y = 0;
+  document.getElementById('pe-'+type+'-zoom').value = st.zoom;
+}
+
+function redrawEditor(type){
+  const st = _pe[type]; if(!st) return;
+  // Sync zoom from slider
+  st.zoom = parseFloat(document.getElementById('pe-'+type+'-zoom').value);
+  const canvas = document.getElementById('pe-'+type+'-canvas');
+  const wrap   = document.getElementById('pe-'+type+'-wrap');
+  const W = wrap.clientWidth || 280, H = wrap.clientHeight || 160;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  const scale = st.zoom / 100;
+  const dW = st.img.naturalWidth  * scale;
+  const dH = st.img.naturalHeight * scale;
+  const dx = (W - dW) / 2 + st.x;
+  const dy = (H - dH) / 2 + st.y;
+  ctx.drawImage(st.img, dx, dy, dW, dH);
+}
+
+function startDrag(e, type){
+  const st = _pe[type]; if(!st) return;
+  e.preventDefault();
+  const pt = e.touches ? e.touches[0] : e;
+  st.dragging = true;
+  st.startX = pt.clientX; st.startY = pt.clientY;
+  st.ox = st.x; st.oy = st.y;
+  const up   = ev => stopDrag(type);
+  const move = ev => {
+    if(!st.dragging) return;
+    ev.preventDefault();
+    const p = ev.touches ? ev.touches[0] : ev;
+    st.x = st.ox + (p.clientX - st.startX);
+    st.y = st.oy + (p.clientY - st.startY);
+    redrawEditor(type);
+  };
+  window.addEventListener('mousemove', move);
+  window.addEventListener('touchmove', move, {passive:false});
+  window.addEventListener('mouseup',  up, {once:true});
+  window.addEventListener('touchend', up, {once:true});
+  function stopDrag(t){ _pe[t] && (_pe[t].dragging=false); window.removeEventListener('mousemove',move); window.removeEventListener('touchmove',move); }
+}
+
+function cropAndApply(type){
+  const canvas = document.getElementById('pe-'+type+'-canvas');
+  // For avatar: crop a centered square (circle displayed via CSS)
+  // For cover/logo/wm: use the full canvas as-is
+  let outCanvas = canvas;
+  if(type === 'avatar'){
+    const side = Math.min(canvas.width, canvas.height);
+    outCanvas = document.createElement('canvas');
+    outCanvas.width = side; outCanvas.height = side;
+    const ox = (canvas.width  - side) / 2;
+    const oy = (canvas.height - side) / 2;
+    outCanvas.getContext('2d').drawImage(canvas, ox, oy, side, side, 0, 0, side, side);
+  }
+  const dataURL = outCanvas.toDataURL('image/jpeg', 0.88);
+  // Store in photos object (same key used by saveCard)
+  const key = (type==='avatar') ? 'a' : (type==='cover') ? 'c' : type;
+  if(type==='avatar' || type==='cover'){
+    photos[key] = dataURL;
+    // Show result preview
+    document.getElementById('pe-'+type+'-result').src = dataURL;
+    document.getElementById('pe-'+type+'-result-wrap').classList.add('shown');
+  } else {
+    // Branding: store separately
+    brandPhotos[key] = dataURL;
+    document.getElementById('pe-'+type+'-result').src = dataURL;
+    document.getElementById('pe-'+type+'-result-wrap').classList.add('shown');
+  }
   updPrev();
+  toast('Photo applied! Save the card to persist.','ok');
+}
+
+function resetEditor(type){
+  const trigId = type==='avatar' ? 'az-trigger' : 'cz-trigger';
+  document.getElementById(trigId).style.display = '';
+  document.getElementById('pe-'+type).style.display = 'none';
+  document.getElementById('pe-'+type+'-result-wrap').classList.remove('shown');
+  const key = type==='avatar' ? 'a' : 'c';
+  photos[key] = '';
+  delete _pe[type];
+  updPrev();
+}
+
+function resetBrandEditor(type){
+  const triggerId = type==='logo' ? 'logo-trigger' : 'wm-trigger';
+  document.getElementById(triggerId).style.display = '';
+  document.getElementById('pe-'+type).style.display = 'none';
+  document.getElementById('pe-'+type+'-result-wrap').classList.remove('shown');
+  brandPhotos[type] = '';
+  delete _pe[type];
 }
 
 // ════ LIVE PREVIEW ════
@@ -944,9 +1236,13 @@ function updPrev(){
   const cab   = document.getElementById('fc')?.value  || '';
   const email = document.getElementById('fem')?.value || '';
   const phone = document.getElementById('fph')?.value || '';
+  const bio   = document.getElementById('fb')?.value  || '';
   document.getElementById('mnm').textContent = name || 'Member Name';
   document.getElementById('mti').textContent = title;
   document.getElementById('mdt').textContent = cab;
+  // Bio snippet in preview
+  const mbio = document.getElementById('mbio');
+  if(mbio){ mbio.textContent = bio; mbio.style.display = bio ? 'block' : 'none'; }
   const av = document.getElementById('mav');
   if(photos.a){ av.innerHTML=`<img src="${photos.a}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
   else { av.textContent = ini(name); }
@@ -1133,8 +1429,8 @@ function svBrand(){
   localStorage.setItem('kb', JSON.stringify(brand));
 }
 function updUrlEx(){ const base=document.getElementById('burl').value||'view.html'; document.getElementById('urlex').textContent=base+'?id=KYLDS-001'; }
-function hLogo(inp){ const f=inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=e=>{ localStorage.setItem('kylds_logo',e.target.result); document.getElementById('blp').src=e.target.result; document.getElementById('blp').style.display='block'; document.getElementById('bld').style.display='none'; toast('Logo saved!','ok'); }; r.readAsDataURL(f); }
-function hWM(inp)  { const f=inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=e=>{ localStorage.setItem('kylds_wm',e.target.result); document.getElementById('bwp').src=e.target.result; document.getElementById('bwp').style.display='block'; document.getElementById('bwd').style.display='none'; toast('Watermark saved!','ok'); }; r.readAsDataURL(f); }
+// hLogo and hWM are replaced by the inline editor (openBrandEditor / cropAndApply).
+// brandPhotos.logo and brandPhotos.wm hold the cropped dataURLs once applied.
 
 // ════ SETTINGS ════
 function chgAdmPass(){
