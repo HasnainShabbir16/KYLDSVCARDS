@@ -515,10 +515,12 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
       <div class="bgrid">
         <div class="bbox">
           <h3>Change Admin Password</h3>
-          <div class="fg"><label>Current Password</label><input type="password" id="sc"></div>
-          <div class="fg"><label>New Password</label><input type="password" id="sn"></div>
-          <div class="fg"><label>Confirm</label><input type="password" id="scf"></div>
-          <button class="bsm bgd" onclick="chgAdmPass()">Update Password</button>
+          <p style="font-size:12px;color:var(--muted2);margin-bottom:14px">Changing this updates the password used to log in to this panel. It is stored locally in your browser.</p>
+          <div class="fg"><label>Current Password</label><input type="password" id="sc" onkeydown="if(event.key===&apos;Enter&apos;)chgAdmPass()"></div>
+          <div class="fg"><label>New Password</label><input type="password" id="sn" onkeydown="if(event.key===&apos;Enter&apos;)chgAdmPass()"></div>
+          <div class="fg"><label>Confirm New Password</label><input type="password" id="scf" onkeydown="if(event.key===&apos;Enter&apos;)chgAdmPass()"></div>
+          <p id="admperr" style="font-size:12px;color:var(--red);min-height:16px;margin-bottom:8px"></p>
+          <button class="bsm bgd" onclick="chgAdmPass()">Update Admin Password</button>
         </div>
         <div class="bbox">
           <h3>System Preferences</h3>
@@ -542,8 +544,9 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
     <button class="mc2" onclick="closeMd('mpw')">✕</button>
     <h3>Change Card Password</h3>
     <p style="font-size:13px;color:var(--muted2);margin-bottom:18px">Member: <strong id="mpwn"></strong></p>
-    <div class="fg"><label>New Password</label><input type="text" id="mpwv" placeholder="Enter new password"></div>
-    <div style="display:flex;gap:8px;margin-top:6px">
+    <div class="fg"><label>New Password</label><input type="text" id="mpwv" placeholder="Enter new password" onkeydown="if(event.key==='Enter')svMPW()"></div>
+    <p id="mpwerr" style="font-size:12px;color:var(--red);min-height:16px;margin-bottom:8px"></p>
+    <div style="display:flex;gap:8px;margin-top:2px">
       <button class="bsm bgd" onclick="svMPW()">Update</button>
       <button class="bsm bol" onclick="genMPas()">Generate</button>
     </div>
@@ -570,9 +573,10 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
 
 <script>
 // ════ CONFIG ════
-// TODO: If your backend uses a different admin credential check endpoint,
-//       replace the local ADM check with a POST /api/auth/login call.
-let ADM = 'admin123';
+// Admin password is persisted in localStorage so it survives page reloads.
+// Default is 'admin123' on first run. Once changed via Settings, it persists.
+// NOTE: For production, replace with a server-side auth endpoint.
+let ADM = localStorage.getItem('kylds_adm_pass') || 'admin123';
 
 // ════ STATE ════
 // cards[] is ALWAYS sourced from the backend — never from localStorage.
@@ -1018,31 +1022,79 @@ function dlMQR(){ const img=document.querySelector('#mqrr img'); if(!img) return
 function cpMLink(){ if(!curQR) return; navigator.clipboard.writeText(getURL(curQR)).catch(()=>{}); toast('Link copied!','ok'); }
 
 // ════ PASSWORD MODAL ════
-// Saves new password to the backend via PATCH, then refreshes.
+// Saves new card password to the backend via PUT /api/cards/update/:id,
+// the same endpoint used by saveCard(). Only the password field is changed;
+// all other existing card fields are preserved by spreading the cached card.
+//
+// NOTE: If your backend supports a dedicated PATCH /api/cards/:id/password
+//       route, change the fetch below to use that instead.
 function openPWMd(id){
   const c = cards.find(x => x.id === id); if(!c) return;
   mpwId = id;
   document.getElementById('mpwn').textContent = c.name;
-  document.getElementById('mpwv').value = '';  // never pre-fill password
+  document.getElementById('mpwv').value = '';  // never pre-fill for security
+  document.getElementById('mpwerr').textContent = '';
   document.getElementById('mpw').classList.add('open');
+  setTimeout(()=>document.getElementById('mpwv').focus(), 100);
 }
 async function svMPW(){
   const v = document.getElementById('mpwv').value.trim();
-  if(!v){ toast('Enter a password','err'); return; }
+  const errEl = document.getElementById('mpwerr');
+  if(!v){ errEl.textContent = 'Please enter a password.'; return; }
+  if(v.length < 4){ errEl.textContent = 'Password must be at least 4 characters.'; return; }
+  errEl.textContent = '';
+
+  // Find the full cached card so we can preserve all its existing fields.
+  const existing = cards.find(x => x.id === mpwId);
+  if(!existing){ toast('Card not found in cache — please refresh.','err'); return; }
+
+  // Build a complete payload identical to what saveCard() sends,
+  // but with the password field replaced by the new value.
+  const payload = {
+    name:       existing.name,
+    role:       existing.title,
+    department: existing.cabinet,
+    memberId:   existing.id,
+    bio:        existing.bio,
+    email:      existing.email,
+    phone:      existing.phone,
+    website:    existing.web,
+    address:    existing.addr,
+    password:   v,                 // ← the only field being changed
+    active:     existing.active,
+    avatar:     existing.avatar,
+    cover:      existing.cover,
+    social: {
+      linkedin:  existing.li,
+      twitter:   existing.tw,
+      instagram: existing.ig,
+      facebook:  existing.fb,
+    }
+  };
+
+  const btn = document.querySelector('#mpw .bgd');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+
   try {
-    // TODO: adjust endpoint if your backend uses a different route for password change
-    const res = await fetch(`/api/cards/${encodeURIComponent(mpwId)}`, {
-      method: 'PATCH',
+    const res = await fetch(`/api/cards/update/${encodeURIComponent(mpwId)}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: v })
+      body: JSON.stringify(payload)
     });
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){
+      const msg = data.message || data.error || `Server error ${res.status}`;
+      errEl.textContent = msg;
+      return;
+    }
     closeMd('mpw');
-    toast('Password updated!', 'ok');
+    toast('Card password updated!', 'ok');
     await refreshAll();
   } catch(err){
     console.error('[KYLDS] svMPW:', err);
-    toast('Could not update password on server.', 'err');
+    errEl.textContent = 'Network error — could not reach server.';
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = 'Update'; }
   }
 }
 function genMPas(){
@@ -1086,12 +1138,22 @@ function hWM(inp)  { const f=inp.files[0]; if(!f) return; const r=new FileReader
 
 // ════ SETTINGS ════
 function chgAdmPass(){
-  const cur=document.getElementById('sc').value, nw=document.getElementById('sn').value, cf=document.getElementById('scf').value;
-  if(cur!==ADM)        { toast('Current password is incorrect.','err'); return; }
-  if(nw!==cf)          { toast("New passwords don't match.",'err'); return; }
-  if(nw.length<6)      { toast('Minimum 6 characters required.','err'); return; }
+  const cur   = document.getElementById('sc').value;
+  const nw    = document.getElementById('sn').value;
+  const cf    = document.getElementById('scf').value;
+  const errEl = document.getElementById('admperr');
+  errEl.textContent = '';
+
+  if(!cur)            { errEl.textContent = 'Please enter your current password.'; return; }
+  if(cur !== ADM)     { errEl.textContent = 'Current password is incorrect.'; document.getElementById('sc').value=''; return; }
+  if(!nw)             { errEl.textContent = 'New password cannot be blank.'; return; }
+  if(nw.length < 6)   { errEl.textContent = 'New password must be at least 6 characters.'; return; }
+  if(nw !== cf)       { errEl.textContent = "New passwords don't match."; document.getElementById('scf').value=''; return; }
+
+  // Persist to localStorage so it survives page reloads
   ADM = nw;
-  toast('Admin password updated!','ok');
+  localStorage.setItem('kylds_adm_pass', ADM);
+  toast('Admin password updated! New password is now active.','ok');
   ['sc','sn','scf'].forEach(i => document.getElementById(i).value='');
 }
 function expAll(){
