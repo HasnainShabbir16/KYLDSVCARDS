@@ -416,8 +416,7 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
                     </div>
                     <div class="pe-controls">
                       <div class="pe-ctrl"><span>Zoom</span><input type="range" id="pe-avatar-zoom" min="10" max="300" value="100" oninput="redrawEditor('avatar')"></div>
-                      <div class="pe-ctrl"><span>X</span><input type="range" id="pe-avatar-x" min="-200" max="200" value="0" oninput="redrawEditor('avatar')"></div>
-                      <div class="pe-ctrl"><span>Y</span><input type="range" id="pe-avatar-y" min="-200" max="200" value="0" oninput="redrawEditor('avatar')"></div>
+                      <div class="pe-ctrl"><span>Move</span><small style="color:#C9A84C">Drag image directly with mouse/finger for precise positioning</small></div>
                     </div>
                     <div class="pe-actions">
                       <button class="pe-btn apply" onclick="cropAndApply('avatar')">✓ Crop &amp; Apply</button>
@@ -448,8 +447,7 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
                     </div>
                     <div class="pe-controls">
                       <div class="pe-ctrl"><span>Zoom</span><input type="range" id="pe-cover-zoom" min="10" max="300" value="100" oninput="redrawEditor('cover')"></div>
-                      <div class="pe-ctrl"><span>X</span><input type="range" id="pe-cover-x" min="-300" max="300" value="0" oninput="redrawEditor('cover')"></div>
-                      <div class="pe-ctrl"><span>Y</span><input type="range" id="pe-cover-y" min="-300" max="300" value="0" oninput="redrawEditor('cover')"></div>
+                      <div class="pe-ctrl"><span>Move</span><small style="color:#C9A84C">Drag image directly with mouse/finger for precise positioning</small></div>
                     </div>
                     <div class="pe-actions">
                       <button class="pe-btn apply" onclick="cropAndApply('cover')">✓ Crop &amp; Apply</button>
@@ -1495,3 +1493,13 @@ updPrev();
 </script>
 </body>
 </html>
+
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.pe-canvas-wrap').forEach(wrap=>{
+    wrap.style.background='#000';
+    wrap.style.border='2px dashed rgba(201,168,76,.35)';
+    wrap.style.borderRadius='14px';
+  });
+});
+</script>
