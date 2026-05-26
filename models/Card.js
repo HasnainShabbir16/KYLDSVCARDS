@@ -7,7 +7,15 @@ const cardSchema = new mongoose.Schema({
   phone: { type: String },
   email: { type: String },
   website: { type: String },
-  image: { type: String }, // Stores uploaded filename
+  image: { type: String },
+  bio: {
+    type: String,
+    default: ''
+  },
+  address: {
+    type: String,
+    default: ''
+  },// Stores uploaded filename
   passwordHash: { type: String },
 });
 
