@@ -271,6 +271,8 @@ border-radius:10px;
   transform:translateY(-46px);margin-bottom:-28px;
 }
 .main-avatar{
+  position:relative;
+
   width:clamp(84px,19vw,108px);height:clamp(84px,19vw,108px);
   border-radius:50%;
   border:3px solid rgba(252,166,25,.55);
@@ -283,15 +285,20 @@ border-radius:10px;
 }
 @keyframes avatarPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
 .main-avatar img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  object-position:center;
-  border-radius:50%;
-  display:block;
+  width:100% !important;
+  height:100% !important;
+  object-fit:cover !important;
+  object-position:center center !important;
+  border-radius:50% !important;
+  display:block !important;
+  position:absolute;
+  inset:0;
   transform:none !important;
+  scale:1 !important;
+  rotate:0deg !important;
   filter:none !important;
   background:none !important;
+  box-shadow:none !important;
 }
 
 .avatar-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-end;padding-bottom:8px}
