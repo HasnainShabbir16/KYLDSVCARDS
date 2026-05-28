@@ -1238,14 +1238,33 @@ function doSaveContact(){
 function emailMember(){
   const emailEl = document.getElementById('contact-email');
   const email = emailEl ? emailEl.textContent.trim() : '';
-  if(email){
-    window.open(
-      "https://mail.google.com/mail/?view=cm&to=" + encodeURIComponent(email),
-      "_blank"
-    );
-  } else {
+  if(!email){
     toast("Email address not found","err");
+    return;
   }
+
+  // Prefer Gmail app on mobile Android
+  const isAndroid = /android/i.test(navigator.userAgent);
+
+  if(isAndroid) {
+    // This intent opens the Gmail app with prefilled recipient
+    const gmailIntent = `intent://compose?to=${encodeURIComponent(email)}#Intent;scheme=mailto;package=com.google.android.gm;action=android.intent.action.SENDTO;end`;
+    window.location.href = gmailIntent;
+    // Fallback (almost immediate, in case Gmail app is not present)
+    setTimeout(function(){
+      window.open(
+        `https://mail.google.com/mail/?authuser&view=cm&fs=1&to=${encodeURIComponent(email)}`,
+        '_blank'
+      );
+    }, 800);
+    return;
+  }
+  
+  // Otherwise, open modern Gmail compose in browser
+  window.open(
+    `https://mail.google.com/mail/?authuser&view=cm&fs=1&to=${encodeURIComponent(email)}`,
+    '_blank'
+  );
 }
 function copyLink(){
   navigator.clipboard.writeText(location.href)
