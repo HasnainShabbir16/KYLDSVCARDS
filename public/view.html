@@ -679,6 +679,13 @@ border-radius:10px;
         <h2 class="member-full-name" id="c-name">Member Name</h2>
         <div class="member-designation" id="c-title"></div>
         <div class="member-cabinet" id="c-cabinet"></div>
+        <div id="member-tagline"
+     style="display:none;
+            font-size:12px;
+            color:rgba(255,193,7,.82);
+            font-style:italic;
+            margin-top:4px">
+</div>
 
         <!-- Bio toggle + bio -->
         <div class="bio-toggle-row" id="bio-toggle-row" style="display:none">
@@ -1001,6 +1008,14 @@ function populateCard(showPrivate = false){
   document.getElementById('c-name').textContent = card.name || '';
   document.getElementById('c-title').textContent = card.title || card.role || '';
   document.getElementById('c-cabinet').textContent = card.cabinet || card.department || '';
+  if(card.branding?.tag){
+  const tg = document.getElementById('member-tagline');
+
+  if(tg){
+    tg.textContent = card.branding.tag;
+    tg.style.display = 'block';
+  }
+}
 
   // ── Bio
   const bioText = card.bio || '';
