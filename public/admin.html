@@ -713,8 +713,14 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
 // ════ STATE ════
 // cards[] and all card data come from the backend only — never localStorage.
 let cards = [];
-let logs  = JSON.parse(localStorage.getItem('kl') || '[]');
-let brand = JSON.parse(localStorage.getItem('kb') || '{"name":"Kashmir Youth Literary and Debating Society","abbr":"KYLDS","tag":"Voices of the Valley","url":"/public/view.html"}');
+let brand = {
+  name: '',
+  abbr: '',
+  tag: '',
+  url: '',
+  logo: '',
+  wm: ''
+};
 let photos      = { a: '', c: '' };      // card avatar + cover dataURLs (set by editor)
 let brandPhotos = { logo: '', wm: '' };  // branding logo + watermark dataURLs (set by editor)
 let editId  = null, curQR = null, mpwId = null;
