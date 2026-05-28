@@ -90,6 +90,18 @@ router.put('/update/:id', async (req, res) => {
   }
 });
 
+// branding
+router.get('/branding', async(req,res)=>{
+  try{
+    const card = await Card.findOne({ 'branding.name': { $exists:true } });
+    if(!card || !card.branding){
+      return res.json({});
+    }
+    res.json(card.branding);
+  }catch(err){
+    res.status(500).json({ success:false });
+  }
+});
 // Delete card by ID
 router.delete('/:id', async (req, res) => {
   try {
