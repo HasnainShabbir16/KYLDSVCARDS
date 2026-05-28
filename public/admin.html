@@ -708,7 +708,7 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
 // Admin password is persisted in localStorage so it survives page reloads.
 // Default is 'admin123' on first run. Once changed via Settings, it persists.
 // NOTE: For production, replace with a server-side auth endpoint.
-//let ADM = localStorage.getItem('kylds_adm_pass') || 'admin123';
+let ADM = localStorage.getItem('kylds_adm_pass') || 'admin123';
 
 // ════ STATE ════
 // cards[] and all card data come from the backend only — never localStorage.
