@@ -984,22 +984,22 @@ function populateCard(showPrivate = false){
     initialsEl.textContent = ini(card.name);
   }
 
-// ── Logo / Watermark / Tagline — from global branding fields
-const coverLogo = document.getElementById('cover-logo');
-if(branding && branding.logo){
-  coverLogo.src = branding.logo;
-  coverLogo.classList.add('shown');
-}
-const wmEl = document.getElementById('wm-logo-img');
-if(branding && branding.wm){
-  wmEl.src = branding.wm;
-  wmEl.style.display = 'block';
-}
-const taglineEl = document.getElementById('member-tagline');
-if(branding && branding.tag){
-  taglineEl.textContent = branding.tag;
-  taglineEl.style.display = 'block';
-}
+  // ── Logo / Watermark / Tagline — from global branding fields
+  const coverLogo = document.getElementById('cover-logo');
+  if(branding && branding.logo){
+    coverLogo.src = branding.logo;
+    coverLogo.classList.add('shown');
+  }
+  const wmEl = document.getElementById('wm-logo-img');
+  if(branding && branding.wm){
+    wmEl.src = branding.wm;
+    wmEl.style.display = 'block';
+  }
+  const taglineEl = document.getElementById('member-tagline');
+  if(branding && branding.tag){
+    taglineEl.textContent = branding.tag;
+    taglineEl.style.display = 'block';
+  }
 
   // ── Status badge (read from actual DB card.active)
   const isActive = card.active !== false;
@@ -1023,13 +1023,12 @@ if(branding && branding.tag){
   document.getElementById('c-title').textContent = card.title || card.role || '';
   document.getElementById('c-cabinet').textContent = card.cabinet || card.department || '';
   if(card.branding?.tag){
-  const tg = document.getElementById('member-tagline');
-
-  if(tg){
-    tg.textContent = card.branding.tag;
-    tg.style.display = 'block';
+    const tg = document.getElementById('member-tagline');
+    if(tg){
+      tg.textContent = card.branding.tag;
+      tg.style.display = 'block';
+    }
   }
-}
 
   // ── Bio
   const bioText = card.bio || '';
@@ -1042,30 +1041,59 @@ if(branding && branding.tag){
 
   // ── Contacts
   const cg = document.getElementById('contact-grid');
-  const contacts = [];
-  if(card.email) contacts.push({icon:'✉️',lbl:'Email',val:showPrivate?card.email:maskValue(card.email),href:showPrivate?`mailto:${card.email}`:'#'});
-  if(card.phone) contacts.push({icon:'📞',lbl:'Phone',val:showPrivate?card.phone:maskValue(card.phone),href:showPrivate?`tel:${card.phone}`:'#'});
-  if(card.web)   contacts.push({icon:'🌐',lbl:'Website',val:card.web.replace(/^https?:\/\//,''),href:card.web});
+  let contactsHTML = '';
+  let emailRendered = false, phoneRendered = false;
 
-  cg.innerHTML = contacts.map(c=>`
-    <a class="contact-card" href="${c.href}" ${c.href.startsWith('http')?'target="_blank"':''}>
-      <div class="contact-icon-wrap">${c.icon}</div>
-      <div class="contact-meta">
-        <div class="contact-lbl">${escapeHtml(c.lbl)}</div>
-        <div class="contact-val">${escapeHtml(c.val)}</div>
-      </div>
-      <div class="contact-arrow">→</div>
-    </a>
-  `).join('');
+  if(card.email) {
+    contactsHTML += `
+      <a class="contact-card" href="${showPrivate ? `mailto:${card.email}` : '#'}">
+        <div class="contact-icon-wrap">✉️</div>
+        <div class="contact-meta">
+          <div class="contact-lbl">Email</div>
+          <div class="contact-val" id="contact-email">${escapeHtml(showPrivate ? card.email : maskValue(card.email))}</div>
+        </div>
+        <div class="contact-arrow">→</div>
+      </a>
+    `;
+    emailRendered = true;
+  }
+  if(card.phone) {
+    contactsHTML += `
+      <a class="contact-card" href="${showPrivate ? `tel:${card.phone}` : '#'}">
+        <div class="contact-icon-wrap">📞</div>
+        <div class="contact-meta">
+          <div class="contact-lbl">Phone</div>
+          <div class="contact-val" id="contact-phone">${escapeHtml(showPrivate ? card.phone : maskValue(card.phone))}</div>
+        </div>
+        <div class="contact-arrow">→</div>
+      </a>
+    `;
+    phoneRendered = true;
+  }
+  if(card.web) {
+    contactsHTML += `
+      <a class="contact-card" href="${card.web}" target="_blank">
+        <div class="contact-icon-wrap">🌐</div>
+        <div class="contact-meta">
+          <div class="contact-lbl">Website</div>
+          <div class="contact-val">${escapeHtml(card.web.replace(/^https?:\/\//,''))}</div>
+        </div>
+        <div class="contact-arrow">→</div>
+      </a>
+    `;
+  }
 
-  if(!contacts.length) document.getElementById('contacts-section').style.display='none';
+  cg.innerHTML = contactsHTML;
+
+  if(!emailRendered && !phoneRendered && !card.web) document.getElementById('contacts-section').style.display='none';
+  else document.getElementById('contacts-section').style.display='block';
 
   // ── Address
   if(card.addr || card.address){
     const addr = card.addr || card.address;
     document.getElementById('c-addr').textContent = addr;
     document.getElementById('addr-section').style.display='block';
-document.getElementById('addr-section').scrollMarginTop='20px';
+    document.getElementById('addr-section').scrollMarginTop='20px';
   }
 
   // ── Socials
@@ -1128,6 +1156,7 @@ function toggleBio(){
 // Save to contacts — ask for password again
 function saveContact(){
   if(!unlocked){ toast('Unlock profile first','err'); return; }
+  callAfterPassword = false;
   // Open confirm-password modal
   document.getElementById('save-modal-inp').value = '';
   document.getElementById('save-modal-err').textContent = '';
@@ -1137,6 +1166,22 @@ function saveContact(){
 
 function closeSaveModal(){
   document.getElementById('save-modal').classList.remove('open');
+}
+
+// Track if we want to call after password check
+let callAfterPassword = false;
+
+function callMember(){
+  if(!unlocked){
+    toast('Unlock profile first','err');
+    return;
+  }
+  callAfterPassword = true;
+  // open password modal for call
+  document.getElementById('save-modal-inp').value = '';
+  document.getElementById('save-modal-err').textContent = '';
+  document.getElementById('save-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('save-modal-inp').focus(), 100);
 }
 
 function confirmSaveContact(){
@@ -1151,6 +1196,20 @@ function confirmSaveContact(){
     return;
   }
   closeSaveModal();
+
+  if(callAfterPassword) {
+    callAfterPassword = false;
+    // Use the phone number as rendered
+    const phoneEl = document.getElementById('contact-phone');
+    const phone = phoneEl ? phoneEl.textContent.trim() : '';
+    if(phone){
+      window.location.href = `tel:${phone}`;
+    } else {
+      toast("Phone number not found","err");
+    }
+    return;
+  }
+
   doSaveContact();
 }
 
@@ -1174,25 +1233,20 @@ function doSaveContact(){
   a.click();
   toast('Contact saved!','ok');
 }
-function callMember(){
-  if(!unlocked || !card || !card.contact || !card.contact.phone){
-    toast('Unlock profile first or phone number missing','err');
-    return;
-  }
-  window.location.href = `tel:${card.contact.phone}`;
-}
 
+// Email button always opens Gmail compose with email as rendered
 function emailMember(){
-  if(!unlocked || !card || !card.contact || !card.contact.email){
-    toast('Unlock profile first or email address missing','err');
-    return;
+  const emailEl = document.getElementById('contact-email');
+  const email = emailEl ? emailEl.textContent.trim() : '';
+  if(email){
+    window.open(
+      "https://mail.google.com/mail/?view=cm&to=" + encodeURIComponent(email),
+      "_blank"
+    );
+  } else {
+    toast("Email address not found","err");
   }
-  window.open(
-    "https://mail.google.com/mail/?view=cm&to=" + encodeURIComponent(card.contact.email),
-    "_blank"
-  );
 }
-
 function copyLink(){
   navigator.clipboard.writeText(location.href)
     .then(()=>toast('Profile link copied!','ok'))
