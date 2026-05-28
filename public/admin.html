@@ -708,7 +708,7 @@ body.light{--dark:#F4F1EB;--dark2:#FFFFFF;--dark3:#EDE9E0;--surface:#E4DFD5;--bo
 // Admin password is persisted in localStorage so it survives page reloads.
 // Default is 'admin123' on first run. Once changed via Settings, it persists.
 // NOTE: For production, replace with a server-side auth endpoint.
-let ADM = localStorage.getItem('kylds_adm_pass') || 'admin123';
+//let ADM = localStorage.getItem('kylds_adm_pass') || 'admin123';
 
 // ════ STATE ════
 // cards[] and all card data come from the backend only — never localStorage.
@@ -1430,71 +1430,53 @@ function expLogs(){
 }
 
 // ════ BRANDING ════
-async function svBrand(){
-
-  brand = {
-    name: document.getElementById('bnm')?.value || '',
-    abbr: document.getElementById('bab')?.value || '',
-    tag: document.getElementById('btg')?.value || '',
-    url: document.getElementById('burl')?.value || '',
+// Save branding
+async function svBrand() {
+  const brand = {
+    name: document.getElementById('bnm').value,
+    abbr: document.getElementById('bab').value,
+    tag:  document.getElementById('btg').value,
+    url:  document.getElementById('burl').value,
     logo: brandPhotos.logo || '',
     wm: brandPhotos.wm || ''
   };
-
-  try{
-
-    await fetch('/api/branding',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json'
-      },
+  try {
+    await fetch('/api/branding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(brand)
     });
-
-  }catch(err){
-    console.error(err);
-  }
+    toast('Branding saved!', 'ok');
+  } catch(err) { console.error(err);}
 }
-  async function loadBranding(){
 
-  try{
-
+// Load branding
+async function loadBranding() {
+  try {
     const res = await fetch('/api/branding');
     const data = await res.json();
-
-    if(!data) return;
-
-    brand = data;
-
-    if(data.name) document.getElementById('bnm').value = data.name;
-    if(data.abbr) document.getElementById('bab').value = data.abbr;
-    if(data.tag) document.getElementById('btg').value = data.tag;
-    if(data.url) document.getElementById('burl').value = data.url;
-
-    if(data.logo){
+    if (!data) return;
+    // Populate the UI fields
+    document.getElementById('bnm').value = data.name || '';
+    document.getElementById('bab').value = data.abbr || '';
+    document.getElementById('btg').value = data.tag  || '';
+    document.getElementById('burl').value = data.url || '';
+    // Show branding images
+    if(data.logo) {
       brandPhotos.logo = data.logo;
-
       const lg = document.getElementById('pe-logo-result');
-      if(lg){
-        lg.src = data.logo;
-        lg.style.display = 'block';
-      }
+      if(lg){ lg.src = data.logo; lg.style.display = 'block'; }
     }
-
-    if(data.wm){
+    if(data.wm) {
       brandPhotos.wm = data.wm;
-
       const wm = document.getElementById('pe-wm-result');
-      if(wm){
-        wm.src = data.wm;
-        wm.style.display = 'block';
-      }
+      if(wm){ wm.src = data.wm; wm.style.display = 'block'; }
     }
-
-  }catch(err){
-    console.error(err);
-  }
+  } catch(err) { console.error(err);}
 }
+
+// On login or panel open
+// call loadBranding();
 function updUrlEx(){ const base=document.getElementById('burl').value||'view.html'; document.getElementById('urlex').textContent=base+'?id=KYLDS-001'; }
 // hLogo and hWM are replaced by the inline editor (openBrandEditor / cropAndApply).
 // brandPhotos.logo and brandPhotos.wm hold the cropped dataURLs once applied.
