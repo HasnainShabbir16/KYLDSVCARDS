@@ -1174,15 +1174,60 @@ function doSaveContact(){
   a.click();
   toast('Contact saved!','ok');
 }
+// ---------- PLACE THIS IN public/view.html SCRIPT SECTION ----------
 
-function callMember(){
-  if(!unlocked||!card.phone){ toast('Unlock profile first','err'); return; }
-  window.location.href = `tel:${card.phone}`;
+let callAfterPassword = false;
+
+// This function is wired to the Call button
+function callMember() {
+  callAfterPassword = true;
+  openSaveModal('call');
 }
 
-function emailMember(){
-  if(!unlocked||!card.email){ toast('Unlock profile first','err'); return; }
-  window.location.href = `mailto:${card.email}`;
+// Patch/replace confirmSaveContact so it works for both "save contact" and "call"
+function confirmSaveContact() {
+  const inp = document.getElementById('save-modal-inp');
+  const err = document.getElementById('save-modal-err');
+  const pwd = inp.value.trim();
+  if(!pwd) {
+    err.textContent = 'Please enter the access code.';
+    inp.classList.add('err-shake');
+    setTimeout(()=>inp.classList.remove('err-shake'), 500);
+    return;
+  }
+  if(card && pwd === savedPassword) {
+    closeSaveModal();
+
+    // Handle call after password if needed
+    if(callAfterPassword) {
+      callAfterPassword = false;
+      const number = card && card.contact && card.contact.phone ? card.contact.phone : "";
+      if(number) {
+        window.location.href = "tel:" + number;
+      } else {
+        toast("Phone number not available","err");
+      }
+      return;
+    }
+    // Call your contact saving logic here
+    saveVCard();
+    return;
+  }
+  err.textContent = "Incorrect access code.";
+  inp.classList.add("err-shake");
+  setTimeout(()=>inp.classList.remove("err-shake"), 500);
+}
+
+// For the Email button: open Gmail with recipient set
+function emailMember() {
+  if(card && card.contact && card.contact.email) {
+    window.open(
+      "https://mail.google.com/mail/?view=cm&to=" + encodeURIComponent(card.contact.email),
+      "_blank"
+    );
+  } else {
+    toast("Email address not available","err");
+  }
 }
 
 function copyLink(){
