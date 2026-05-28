@@ -782,7 +782,8 @@ function doLogin(){
   if(u === 'admin' && p === ADM){
     document.getElementById('login-wrap').classList.add('gone');
     document.getElementById('app').classList.add('on');
-    refreshAll();   // load real data from MongoDB immediately on login
+    refreshAll(); 
+    loadBranding();// load real data from MongoDB immediately on login
   } else {
     const e = document.getElementById('lerr');
     e.textContent = 'Invalid credentials. Please try again.';
@@ -1429,14 +1430,70 @@ function expLogs(){
 }
 
 // ════ BRANDING ════
-function svBrand(){
+async function svBrand(){
+
   brand = {
-    name: document.getElementById('bnm')?.value  || brand.name,
-    abbr: document.getElementById('bab')?.value  || brand.abbr,
-    tag:  document.getElementById('btg')?.value  || brand.tag,
-    url:  document.getElementById('burl')?.value || brand.url
+    name: document.getElementById('bnm')?.value || '',
+    abbr: document.getElementById('bab')?.value || '',
+    tag: document.getElementById('btg')?.value || '',
+    url: document.getElementById('burl')?.value || '',
+    logo: brandPhotos.logo || '',
+    wm: brandPhotos.wm || ''
   };
-  localStorage.setItem('kb', JSON.stringify(brand));
+
+  try{
+
+    await fetch('/api/branding',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json'
+      },
+      body: JSON.stringify(brand)
+    });
+
+  }catch(err){
+    console.error(err);
+  }
+}
+  async function loadBranding(){
+
+  try{
+
+    const res = await fetch('/api/branding');
+    const data = await res.json();
+
+    if(!data) return;
+
+    brand = data;
+
+    if(data.name) document.getElementById('bnm').value = data.name;
+    if(data.abbr) document.getElementById('bab').value = data.abbr;
+    if(data.tag) document.getElementById('btg').value = data.tag;
+    if(data.url) document.getElementById('burl').value = data.url;
+
+    if(data.logo){
+      brandPhotos.logo = data.logo;
+
+      const lg = document.getElementById('pe-logo-result');
+      if(lg){
+        lg.src = data.logo;
+        lg.style.display = 'block';
+      }
+    }
+
+    if(data.wm){
+      brandPhotos.wm = data.wm;
+
+      const wm = document.getElementById('pe-wm-result');
+      if(wm){
+        wm.src = data.wm;
+        wm.style.display = 'block';
+      }
+    }
+
+  }catch(err){
+    console.error(err);
+  }
 }
 function updUrlEx(){ const base=document.getElementById('burl').value||'view.html'; document.getElementById('urlex').textContent=base+'?id=KYLDS-001'; }
 // hLogo and hWM are replaced by the inline editor (openBrandEditor / cropAndApply).
