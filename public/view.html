@@ -825,7 +825,18 @@ function escapeHtml(str=''){
 // ════════════ INITIAL LOAD ════════════
 
 window.addEventListener('DOMContentLoaded', loadCard);
+let branding = null;
 
+// Fetches branding object from the backend
+async function loadBranding() {
+  try {
+    const res = await fetch('/api/branding');
+    branding = await res.json();
+  } catch (err) {
+    branding = {};
+    console.error('Branding fetch failed:', err);
+  }
+}
 async function loadCard(){
   if(!cardId){ showFatal('Card not found'); return; }
   try{
@@ -853,8 +864,9 @@ async function loadCard(){
         </div>`;
       return;
     }
-    // ── Active: show password screen as normal ──────────────────────────────
+       // ── Active: show password screen as normal ──────────────────────────────
     initPreviewChip();
+    await loadBranding(); // <-- New
     populateCard(false);
     document.getElementById('card-screen').classList.add('visible');
   }catch(err){
@@ -972,20 +984,22 @@ function populateCard(showPrivate = false){
     initialsEl.textContent = ini(card.name);
   }
 
-  // ── Logo / Watermark — from DB card fields (logo and wm stored server-side)
-  // No localStorage used. The backend should return card.logo and card.wm if set.
-  const coverLogo = document.getElementById('cover-logo');
-  const logoSrc = card.logo || card.logoUrl || '';
-  const wmSrc   = card.wm   || card.wmUrl   || '';
-  if(logoSrc){
-    coverLogo.src = logoSrc;
-    coverLogo.classList.add('shown');
-  }
-  if(wmSrc){
-    const wmEl = document.getElementById('wm-logo-img');
-    wmEl.src = wmSrc;
-    wmEl.style.display = 'block';
-  }
+// ── Logo / Watermark / Tagline — from global branding fields
+const coverLogo = document.getElementById('cover-logo');
+if(branding && branding.logo){
+  coverLogo.src = branding.logo;
+  coverLogo.classList.add('shown');
+}
+const wmEl = document.getElementById('wm-logo-img');
+if(branding && branding.wm){
+  wmEl.src = branding.wm;
+  wmEl.style.display = 'block';
+}
+const taglineEl = document.getElementById('member-tagline');
+if(branding && branding.tag){
+  taglineEl.textContent = branding.tag;
+  taglineEl.style.display = 'block';
+}
 
   // ── Status badge (read from actual DB card.active)
   const isActive = card.active !== false;
