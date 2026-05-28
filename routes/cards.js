@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 
-// Card Schema (updated for bio/address)
+// Card Schema (includes branding, bio, address, active)
 const CardSchema = new mongoose.Schema({
   name: String,
   role: String,
@@ -19,6 +19,14 @@ const CardSchema = new mongoose.Schema({
   address: {
     type: String,
     default: ''
+  },
+  branding: {
+    name: { type: String, default: '' },
+    abbr: { type: String, default: '' },
+    tag:  { type: String, default: '' },
+    url:  { type: String, default: '' },
+    logo: { type: String, default: '' },
+    wm:   { type: String, default: '' }
   },
   active: {
     type: Boolean,
@@ -43,6 +51,7 @@ router.post('/create', async (req, res) => {
       password: req.body.password,
       bio: req.body.bio || '',
       address: req.body.address || '',
+      branding: req.body.branding || {},
       active: typeof req.body.active === 'boolean' ? req.body.active : true,
       // ...any other fields
     });
@@ -66,34 +75,37 @@ router.get('/', async (req, res) => {
 // Update an existing card
 router.put('/update/:id', async (req, res) => {
   try {
-    const updated = await Card.findByIdAndUpdate(
-      req.params.id,
-      {
-        name: req.body.name,
-        role: req.body.role,
-        department: req.body.department,
-        avatar: req.body.avatar,
-        cover: req.body.cover,
-        phone: req.body.phone,
-        email: req.body.email,
-        password: req.body.password,
-        bio: req.body.bio || '',
-        address: req.body.address || '',
-        active: typeof req.body.active === 'boolean' ? req.body.active : true,
-        // ...any other fields
-      },
-      { new: true }
-    );
-    res.json({ success: true, card: updated });
+    const card = await Card.findById(req.params.id);
+    if (!card) return res.status(404).json({ success: false, error: 'Card not found' });
+
+    card.name       = req.body.name       ?? card.name;
+    card.role       = req.body.role       ?? card.role;
+    card.department = req.body.department ?? card.department;
+    card.avatar     = req.body.avatar     ?? card.avatar;
+    card.cover      = req.body.cover      ?? card.cover;
+    card.phone      = req.body.phone      ?? card.phone;
+    card.email      = req.body.email      ?? card.email;
+    card.password   = req.body.password   ?? card.password;
+    card.bio        = req.body.bio        ?? card.bio;
+    card.address    = req.body.address    ?? card.address;
+    card.active     = typeof req.body.active === 'boolean' ? req.body.active : card.active;
+
+    // Update branding object if provided
+    if(req.body.branding){
+      card.branding = req.body.branding;
+    }
+
+    await card.save();
+    res.json({ success: true, card });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// branding
+// Branding fetch route (single branding, first found)
 router.get('/branding', async(req,res)=>{
   try{
-    const card = await Card.findOne({ 'branding.name': { $exists:true } });
+    const card = await Card.findOne({ 'branding.name': { $exists:true, $ne: '' } });
     if(!card || !card.branding){
       return res.json({});
     }
@@ -102,6 +114,7 @@ router.get('/branding', async(req,res)=>{
     res.status(500).json({ success:false });
   }
 });
+
 // Delete card by ID
 router.delete('/:id', async (req, res) => {
   try {
