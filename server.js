@@ -22,7 +22,7 @@ app.get('/', (req, res) => {
 // API routes for cards (make sure you have this line after 'app' is defined!)
 const cardsRouter = require('./routes/cards');
 app.use('/api/cards', cardsRouter);
-
+app.use('/api/branding', require('./routes/branding'));
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
