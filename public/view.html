@@ -251,44 +251,16 @@ body{background:var(--dark);color:var(--text);font-family:var(--ff);min-height:1
 /* Logo display on cover top-left */
 .cover-logo{
   position:absolute;top:14px;left:14px;
-  width:62px;height:62px;
-  border-radius:50%;
-  object-fit:cover;
+  max-height:34px;max-width:90px;object-fit:contain;
   opacity:1;
-  border:2px solid rgba(252,166,25,.55);
-  box-shadow:0 4px 18px rgba(0,0,0,.65),0 0 0 3px rgba(252,166,25,.12);
-  filter:drop-shadow(0 2px 8px rgba(0,0,0,.6));
-  background:rgba(15,26,13,.6);
+filter:drop-shadow(0 2px 10px rgba(0,0,0,.7));
+background:rgba(0,0,0,.18);
+padding:4px 8px;
+border-radius:10px;
   cursor:pointer;
   display:none;
 }
 .cover-logo.shown{display:block}
-
-/* Large branding logo watermark centred inside card body */
-.wm-logo-bg{
-  position:absolute;
-  top:50%;left:50%;
-  transform:translate(-50%,-50%);
-  width:min(220px,60%);
-  height:auto;
-  opacity:.07;
-  pointer-events:none;
-  user-select:none;
-  object-fit:contain;
-  border-radius:50%;
-  filter:brightness(0) invert(1) sepia(1) saturate(1.5) hue-rotate(30deg);
-  z-index:0;
-}
-
-/* Circular logo inside the seal ring on the password screen */
-.seal-logo-img{
-  position:relative;
-  z-index:1;
-  width:54px;height:54px;
-  border-radius:50%;
-  object-fit:cover;
-  display:block;
-}
 
 
 
@@ -636,10 +608,7 @@ body{background:var(--dark);color:var(--text);font-family:var(--ff);min-height:1
   <div class="pw-wrap">
     <div class="pw-deco-top"></div>
     <div class="pw-card">
-      <div class="pw-seal-ring" id="pw-seal-ring">
-        <span id="seal-emoji">🏛️</span>
-        <img id="seal-logo-img" class="seal-logo-img" src="" alt="KYLDS" style="display:none">
-      </div>
+      <div class="pw-seal-ring"><span>🏛️</span></div>
       <div class="pw-society">Kashmir Youth Literary &amp; Debating Society</div>
       <h1 class="pw-title">Secure Member Card</h1>
       <p class="pw-sub">This profile is protected.<br>Enter the access code to continue.</p>
@@ -703,7 +672,6 @@ body{background:var(--dark);color:var(--text);font-family:var(--ff);min-height:1
     <!-- CARD BODY -->
     <div class="card-body">
       <img id="wm-logo-img" class="wm-logo" src="" style="display:none" alt="">
-      <img id="wm-logo-bg" class="wm-logo-bg" src="" style="display:none" alt="">
 
       <!-- Identity -->
       <div class="identity-section">
@@ -711,6 +679,13 @@ body{background:var(--dark);color:var(--text);font-family:var(--ff);min-height:1
         <h2 class="member-full-name" id="c-name">Member Name</h2>
         <div class="member-designation" id="c-title"></div>
         <div class="member-cabinet" id="c-cabinet"></div>
+        <div id="member-tagline"
+     style="display:none;
+            font-size:12px;
+            color:rgba(255,193,7,.82);
+            font-style:italic;
+            margin-top:4px">
+</div>
 
         <!-- Bio toggle + bio -->
         <div class="bio-toggle-row" id="bio-toggle-row" style="display:none">
@@ -850,55 +825,31 @@ function escapeHtml(str=''){
 // ════════════ INITIAL LOAD ════════════
 
 window.addEventListener('DOMContentLoaded', loadCard);
-
-// In-memory branding — fetched once from backend, never from localStorage
 let branding = null;
 
-async function fetchBranding(){
-  try{
+// Fetches branding object from the backend
+async function loadBranding() {
+  try {
     const res = await fetch('/api/branding');
-    if(!res.ok) return;
     branding = await res.json();
-    applyBrandingToSeal();
-  }catch(e){
-    // branding unavailable — fallback to emoji already in place
-    console.warn('[KYLDS] Branding unavailable:', e.message);
+  } catch (err) {
+    branding = {};
+    console.error('Branding fetch failed:', err);
   }
 }
-
-// Apply the branding logo to the password-screen seal ring (task 1)
-function applyBrandingToSeal(){
-  if(!branding || !branding.logo) return;
-  const emojiEl  = document.getElementById('seal-emoji');
-  const logoImg  = document.getElementById('seal-logo-img');
-  if(!logoImg) return;
-  logoImg.src = branding.logo;
-  logoImg.onerror = function(){
-    // Logo failed to load — fall back to emoji
-    logoImg.style.display = 'none';
-    if(emojiEl) emojiEl.style.display = '';
-  };
-  logoImg.onload = function(){
-    if(emojiEl) emojiEl.style.display = 'none';
-    logoImg.style.display = 'block';
-  };
-}
-
 async function loadCard(){
   if(!cardId){ showFatal('Card not found'); return; }
   try{
-    // Fetch card and branding in parallel for speed
-    const [cardRes] = await Promise.all([
-      fetch(API.getCard(cardId)),
-      fetchBranding()
-    ]);
-    if(!cardRes.ok) throw new Error('Card not found');
-    const data = await cardRes.json();
+    const res = await fetch(API.getCard(cardId));
+    if(!res.ok) throw new Error('Card not found');
+    const data = await res.json();
     if(!data) throw new Error('Card not found');
     card = data.card || data;
     if(!card) throw new Error('Card not found');
 
-    // ── Active / Inactive gate ─────────────────────────────────────────
+    // ── Active / Inactive gate ──────────────────────────────────────────────
+    // Read the active field from the DB response. If inactive, show a clear
+    // inactive message and skip the password screen entirely.
     if(card.active === false){
       document.getElementById('pw-screen').style.display = 'none';
       document.getElementById('card-screen').classList.add('visible');
@@ -913,8 +864,9 @@ async function loadCard(){
         </div>`;
       return;
     }
-    // ── Active: show password screen as normal ─────────────────────────
+       // ── Active: show password screen as normal ──────────────────────────────
     initPreviewChip();
+    await loadBranding(); // <-- New
     populateCard(false);
     document.getElementById('card-screen').classList.add('visible');
   }catch(err){
@@ -1032,35 +984,21 @@ function populateCard(showPrivate = false){
     initialsEl.textContent = ini(card.name);
   }
 
-  // ── Logo / Watermark — sourced from in-memory `branding` (fetched from API)
-  //    with card-level overrides.  NO localStorage used anywhere.
-  const logoSrc = (branding && branding.logo) || card.logo || card.logoUrl || '';
-  const wmSrc   = (branding && branding.wm)   || card.wm   || card.wmUrl   || '';
-
-  // (a) Top-left circular cover logo
+  // ── Logo / Watermark / Tagline — from global branding fields
   const coverLogo = document.getElementById('cover-logo');
-  if(logoSrc && !coverLogo.src){
-    coverLogo.src = logoSrc;
-    coverLogo.onerror = () => { coverLogo.style.display = 'none'; };
+  if(branding && branding.logo){
+    coverLogo.src = branding.logo;
     coverLogo.classList.add('shown');
   }
-
-  // (b) Small corner watermark (bottom-right of card-body)
-  if(wmSrc){
-    const wmEl = document.getElementById('wm-logo-img');
-    if(wmEl && !wmEl.src){
-      wmEl.src = wmSrc;
-      wmEl.style.display = 'block';
-      wmEl.onerror = () => { wmEl.style.display = 'none'; };
-    }
+  const wmEl = document.getElementById('wm-logo-img');
+  if(branding && branding.wm){
+    wmEl.src = branding.wm;
+    wmEl.style.display = 'block';
   }
-
-  // (c) Large centred background watermark inside card-body (task 2)
-  const wmBg = document.getElementById('wm-logo-bg');
-  if(wmBg && logoSrc && !wmBg.src){
-    wmBg.src = logoSrc;
-    wmBg.style.display = 'block';
-    wmBg.onerror = () => { wmBg.style.display = 'none'; };
+  const taglineEl = document.getElementById('member-tagline');
+  if(branding && branding.tag){
+    taglineEl.textContent = branding.tag;
+    taglineEl.style.display = 'block';
   }
 
   // ── Status badge (read from actual DB card.active)
@@ -1084,6 +1022,13 @@ function populateCard(showPrivate = false){
   document.getElementById('c-name').textContent = card.name || '';
   document.getElementById('c-title').textContent = card.title || card.role || '';
   document.getElementById('c-cabinet').textContent = card.cabinet || card.department || '';
+  if(card.branding?.tag){
+    const tg = document.getElementById('member-tagline');
+    if(tg){
+      tg.textContent = card.branding.tag;
+      tg.style.display = 'block';
+    }
+  }
 
   // ── Bio
   const bioText = card.bio || '';
@@ -1096,30 +1041,59 @@ function populateCard(showPrivate = false){
 
   // ── Contacts
   const cg = document.getElementById('contact-grid');
-  const contacts = [];
-  if(card.email) contacts.push({icon:'✉️',lbl:'Email',val:showPrivate?card.email:maskValue(card.email),href:showPrivate?`mailto:${card.email}`:'#'});
-  if(card.phone) contacts.push({icon:'📞',lbl:'Phone',val:showPrivate?card.phone:maskValue(card.phone),href:showPrivate?`tel:${card.phone}`:'#'});
-  if(card.web)   contacts.push({icon:'🌐',lbl:'Website',val:card.web.replace(/^https?:\/\//,''),href:card.web});
+  let contactsHTML = '';
+  let emailRendered = false, phoneRendered = false;
 
-  cg.innerHTML = contacts.map(c=>`
-    <a class="contact-card" href="${c.href}" ${c.href.startsWith('http')?'target="_blank"':''}>
-      <div class="contact-icon-wrap">${c.icon}</div>
-      <div class="contact-meta">
-        <div class="contact-lbl">${escapeHtml(c.lbl)}</div>
-        <div class="contact-val">${escapeHtml(c.val)}</div>
-      </div>
-      <div class="contact-arrow">→</div>
-    </a>
-  `).join('');
+  if(card.email) {
+    contactsHTML += `
+      <a class="contact-card" href="${showPrivate ? `mailto:${card.email}` : '#'}">
+        <div class="contact-icon-wrap">✉️</div>
+        <div class="contact-meta">
+          <div class="contact-lbl">Email</div>
+          <div class="contact-val" id="contact-email">${escapeHtml(showPrivate ? card.email : maskValue(card.email))}</div>
+        </div>
+        <div class="contact-arrow">→</div>
+      </a>
+    `;
+    emailRendered = true;
+  }
+  if(card.phone) {
+    contactsHTML += `
+      <a class="contact-card" href="${showPrivate ? `tel:${card.phone}` : '#'}">
+        <div class="contact-icon-wrap">📞</div>
+        <div class="contact-meta">
+          <div class="contact-lbl">Phone</div>
+          <div class="contact-val" id="contact-phone">${escapeHtml(showPrivate ? card.phone : maskValue(card.phone))}</div>
+        </div>
+        <div class="contact-arrow">→</div>
+      </a>
+    `;
+    phoneRendered = true;
+  }
+  if(card.web) {
+    contactsHTML += `
+      <a class="contact-card" href="${card.web}" target="_blank">
+        <div class="contact-icon-wrap">🌐</div>
+        <div class="contact-meta">
+          <div class="contact-lbl">Website</div>
+          <div class="contact-val">${escapeHtml(card.web.replace(/^https?:\/\//,''))}</div>
+        </div>
+        <div class="contact-arrow">→</div>
+      </a>
+    `;
+  }
 
-  if(!contacts.length) document.getElementById('contacts-section').style.display='none';
+  cg.innerHTML = contactsHTML;
+
+  if(!emailRendered && !phoneRendered && !card.web) document.getElementById('contacts-section').style.display='none';
+  else document.getElementById('contacts-section').style.display='block';
 
   // ── Address
   if(card.addr || card.address){
     const addr = card.addr || card.address;
     document.getElementById('c-addr').textContent = addr;
     document.getElementById('addr-section').style.display='block';
-document.getElementById('addr-section').scrollMarginTop='20px';
+    document.getElementById('addr-section').scrollMarginTop='20px';
   }
 
   // ── Socials
@@ -1182,6 +1156,7 @@ function toggleBio(){
 // Save to contacts — ask for password again
 function saveContact(){
   if(!unlocked){ toast('Unlock profile first','err'); return; }
+  callAfterPassword = false;
   // Open confirm-password modal
   document.getElementById('save-modal-inp').value = '';
   document.getElementById('save-modal-err').textContent = '';
@@ -1191,6 +1166,22 @@ function saveContact(){
 
 function closeSaveModal(){
   document.getElementById('save-modal').classList.remove('open');
+}
+
+// Track if we want to call after password check
+let callAfterPassword = false;
+
+function callMember(){
+  if(!unlocked){
+    toast('Unlock profile first','err');
+    return;
+  }
+  callAfterPassword = true;
+  // open password modal for call
+  document.getElementById('save-modal-inp').value = '';
+  document.getElementById('save-modal-err').textContent = '';
+  document.getElementById('save-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('save-modal-inp').focus(), 100);
 }
 
 function confirmSaveContact(){
@@ -1205,6 +1196,20 @@ function confirmSaveContact(){
     return;
   }
   closeSaveModal();
+
+  if(callAfterPassword) {
+    callAfterPassword = false;
+    // Use the phone number as rendered
+    const phoneEl = document.getElementById('contact-phone');
+    const phone = phoneEl ? phoneEl.textContent.trim() : '';
+    if(phone){
+      window.location.href = `tel:${phone}`;
+    } else {
+      toast("Phone number not found","err");
+    }
+    return;
+  }
+
   doSaveContact();
 }
 
@@ -1229,16 +1234,38 @@ function doSaveContact(){
   toast('Contact saved!','ok');
 }
 
-function callMember(){
-  if(!unlocked||!card.phone){ toast('Unlock profile first','err'); return; }
-  window.location.href = `tel:${card.phone}`;
-}
-
+// Email button always opens Gmail compose with email as rendered
 function emailMember(){
-  if(!unlocked||!card.email){ toast('Unlock profile first','err'); return; }
-  window.location.href = `mailto:${card.email}`;
-}
+  const emailEl = document.getElementById('contact-email');
+  const email = emailEl ? emailEl.textContent.trim() : '';
+  if(!email){
+    toast("Email address not found","err");
+    return;
+  }
 
+  // Prefer Gmail app on mobile Android
+  const isAndroid = /android/i.test(navigator.userAgent);
+
+  if(isAndroid) {
+    // This intent opens the Gmail app with prefilled recipient
+    const gmailIntent = `intent://compose?to=${encodeURIComponent(email)}#Intent;scheme=mailto;package=com.google.android.gm;action=android.intent.action.SENDTO;end`;
+    window.location.href = gmailIntent;
+    // Fallback (almost immediate, in case Gmail app is not present)
+    setTimeout(function(){
+      window.open(
+        `https://mail.google.com/mail/?authuser&view=cm&fs=1&to=${encodeURIComponent(email)}`,
+        '_blank'
+      );
+    }, 800);
+    return;
+  }
+  
+  // Otherwise, open modern Gmail compose in browser
+  window.open(
+    `https://mail.google.com/mail/?authuser&view=cm&fs=1&to=${encodeURIComponent(email)}`,
+    '_blank'
+  );
+}
 function copyLink(){
   navigator.clipboard.writeText(location.href)
     .then(()=>toast('Profile link copied!','ok'))
